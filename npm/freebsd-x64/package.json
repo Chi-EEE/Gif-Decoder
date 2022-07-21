@@ -1,6 +1,6 @@
 {
   "name": "@chi_eee/gif-decoder-freebsd-x64",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "os": [
     "freebsd"
   ],
