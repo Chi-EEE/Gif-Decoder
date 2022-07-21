@@ -1,9 +1,12 @@
 {
-  "name": "@napi-rs/package-template",
+  "name": "@chi_eee/gif-decoder",
   "version": "1.0.0",
-  "description": "Template project for writing node package with napi-rs",
+  "description": "Decodes Gif Files",
   "main": "index.js",
-  "repository": "git@github.com:napi-rs/package-template.git",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HuuChiHuynh/Gif-Decoder.git"
+  },
   "license": "MIT",
   "keywords": [
     "napi-rs",
@@ -18,7 +21,7 @@
     "index.js"
   ],
   "napi": {
-    "name": "package-template",
+    "name": "gif-decoder",
     "triples": {
       "defaults": true,
       "additional": [
@@ -54,6 +57,9 @@
     "prepublishOnly": "napi prepublish -t npm",
     "test": "ava",
     "version": "napi version"
+  },
+  "dependencies": {
+    "@napi-rs/package-template": "^1.0.0"
   },
   "devDependencies": {
     "@napi-rs/cli": "^2.9.0",
@@ -99,5 +105,26 @@
     "singleQuote": true,
     "arrowParens": "always"
   },
-  "packageManager": "yarn@3.2.1"
+  "packageManager": "yarn@3.2.1",
+  "types": "./index.d.ts",
+  "bugs": {
+    "url": "https://github.com/HuuChiHuynh/Gif-Decoder/issues"
+  },
+  "homepage": "https://github.com/HuuChiHuynh/Gif-Decoder#readme",
+  "author": "",
+  "optionalDependencies": {
+    "@chi_eee/gif-decoder-win32-x64-msvc": "1.0.0",
+    "@chi_eee/gif-decoder-darwin-x64": "1.0.0",
+    "@chi_eee/gif-decoder-linux-x64-gnu": "1.0.0",
+    "@chi_eee/gif-decoder-linux-x64-musl": "1.0.0",
+    "@chi_eee/gif-decoder-linux-arm64-gnu": "1.0.0",
+    "@chi_eee/gif-decoder-win32-ia32-msvc": "1.0.0",
+    "@chi_eee/gif-decoder-linux-arm-gnueabihf": "1.0.0",
+    "@chi_eee/gif-decoder-darwin-arm64": "1.0.0",
+    "@chi_eee/gif-decoder-android-arm64": "1.0.0",
+    "@chi_eee/gif-decoder-freebsd-x64": "1.0.0",
+    "@chi_eee/gif-decoder-linux-arm64-musl": "1.0.0",
+    "@chi_eee/gif-decoder-win32-arm64-msvc": "1.0.0",
+    "@chi_eee/gif-decoder-android-arm-eabi": "1.0.0"
+  }
 }
