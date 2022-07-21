@@ -111,20 +111,5 @@
     "url": "https://github.com/HuuChiHuynh/Gif-Decoder/issues"
   },
   "homepage": "https://github.com/HuuChiHuynh/Gif-Decoder#readme",
-  "author": "",
-  "optionalDependencies": {
-    "@chi_eee/gif-decoder-win32-x64-msvc": "1.0.1",
-    "@chi_eee/gif-decoder-darwin-x64": "1.0.1",
-    "@chi_eee/gif-decoder-linux-x64-gnu": "1.0.1",
-    "@chi_eee/gif-decoder-linux-x64-musl": "1.0.1",
-    "@chi_eee/gif-decoder-linux-arm64-gnu": "1.0.1",
-    "@chi_eee/gif-decoder-win32-ia32-msvc": "1.0.1",
-    "@chi_eee/gif-decoder-linux-arm-gnueabihf": "1.0.1",
-    "@chi_eee/gif-decoder-darwin-arm64": "1.0.1",
-    "@chi_eee/gif-decoder-android-arm64": "1.0.1",
-    "@chi_eee/gif-decoder-freebsd-x64": "1.0.1",
-    "@chi_eee/gif-decoder-linux-arm64-musl": "1.0.1",
-    "@chi_eee/gif-decoder-win32-arm64-msvc": "1.0.1",
-    "@chi_eee/gif-decoder-android-arm-eabi": "1.0.1"
-  }
+  "author": ""
 }
