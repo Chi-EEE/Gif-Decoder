@@ -324,6 +324,7 @@ impl Decoder {
 
     let clear_code = Self::shl_or(offset, 2, (lzw_minimum_code_size - 1).into(), 0);
     let eoi_code = clear_code + 1;
+    let mut available = clear_code + 2;
 
     let mut index_stream: Vec<u8> = Vec::new();
 
@@ -351,10 +352,8 @@ impl Decoder {
       br.push_bytes(&sliced_bytes);
       loop {
         let code = br.read_bits(size).unwrap();
-        if code == eoi_code {
+        if code > available || code == eoi_code {
           code_stream.push(code);
-          break;
-        } else if code > last_code {
           break;
         } else if code == clear_code {
           code_stream = Vec::new();
@@ -427,6 +426,7 @@ impl Decoder {
             }
           }
         }
+        available += 1;
         code_stream.push(code);
         let has_bits = match br.has_bits(size) {
           Some(has_bits) => has_bits,
