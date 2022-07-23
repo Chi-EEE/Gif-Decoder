@@ -1,8 +1,33 @@
 import test from 'ava'
 
-import { plus100 } from '../index'
+import { Decoder } from '../index'
 
-test('sync function from native code', (t) => {
-  const fixture = 42
-  t.is(plus100(fixture), fixture + 100)
+test('sample_1.gif: Frame Count is 1', (t) => {
+  let gif = Decoder.decode("./gifs/sample_1.gif");
+  t.is(gif.frames.length, 1)
+})
+
+test('sample_1.gif: Version is 89a', (t) => {
+  let gif = Decoder.decode("./gifs/sample_1.gif");
+  t.is(gif.version, "89a")
+})
+
+test('sample_2_animation.gif: Frame Count is 3', (t) => {
+  let gif = Decoder.decode("./gifs/sample_2_animation.gif");
+  t.is(gif.frames.length, 3)
+})
+
+test('sample_2_animation.gif: Frame 3: Top is 2', (t) => {
+  let gif = Decoder.decode("./gifs/sample_2_animation.gif");
+  t.is(gif.frames[2].im.top, 2)
+})
+
+test('Dancing.gif: Global Table Length is 256', (t) => {
+  let gif = Decoder.decode("./gifs/Dancing.gif");
+  t.is(gif.globalTable.length, 256)
+})
+
+test('Dancing.gif: Frame 1: Local Color Table Flag is false', (t) => {
+  let gif = Decoder.decode("./gifs/Dancing.gif");
+  t.is(gif.frames[0].im.localColorTableFlag, false)
 })

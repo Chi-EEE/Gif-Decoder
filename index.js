@@ -218,7 +218,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { plus100, sub100 } = nativeBinding
+const { Gif, Decoder } = nativeBinding
 
-module.exports.plus100 = plus100
-module.exports.sub100 = sub100
+module.exports.Gif = Gif
+module.exports.Decoder = Decoder
