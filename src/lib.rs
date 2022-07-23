@@ -341,7 +341,7 @@ impl Decoder {
 
     let mut code_table: HashMap<usize, Vec<u8>> = HashMap::new();
     let mut code_stream: Vec<u16> = Vec::new();
-    for n in 0..eoi_code {
+    for n in 0..=eoi_code {
       if n < clear_code {
         code_table.insert(n as usize, vec![n as u8]);
       } else {
@@ -366,10 +366,12 @@ impl Decoder {
         if code == eoi_code {
           code_stream.push(code);
           break;
+        } else if code > last_code {
+          break;
         } else if code == clear_code {
           code_stream = Vec::new();
           code_table = HashMap::new();
-          for n in 0..eoi_code {
+          for n in 0..=eoi_code {
             if n < clear_code {
               code_table.insert(n as usize, vec![n as u8]);
             } else {
@@ -386,7 +388,7 @@ impl Decoder {
               index_stream.extend(codes);
             }
             None => {
-              println!("invalid code");
+              println!("invalid code: {}", code);
               exit(1);
             }
           }
@@ -401,7 +403,7 @@ impl Decoder {
                 k = codes[0];
               }
               None => {
-                println!("invalid code");
+                println!("invalid code: {}", code);
                 exit(2);
               }
             }
@@ -413,7 +415,7 @@ impl Decoder {
                 index_stream.push(k);
               }
               None => {
-                println!("invalid code");
+                println!("invalid code: {}", prev_code);
                 exit(3);
               }
             }
@@ -431,9 +433,8 @@ impl Decoder {
                 }
               }
               None => {
-                println!("invalid code");
-       
-				exit(4);
+                println!("invalid code: {}", prev_code);
+                exit(4);
               }
             }
           }
@@ -487,7 +488,7 @@ impl Decoder {
     }
     Self::increment_offset(offset, block_size);
 
-	Self::skip(offset, contents);
+    Self::skip(offset, contents);
   }
   fn handle_comment_extension(offset: &mut usize, gif: &mut Gif, contents: &[u8]) {
     // Comment Extension (Optional)
