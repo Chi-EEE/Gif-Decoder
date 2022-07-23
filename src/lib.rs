@@ -34,13 +34,7 @@ impl Gif {
           buffer.push(color.red.try_into().unwrap());
           buffer.push(color.green.try_into().unwrap());
           buffer.push(color.blue.try_into().unwrap());
-          if frame.gcd.transparent_color_flag
-            && index == (&frame.gcd.transparent_color_index.try_into().unwrap())
-          {
-            buffer.push(0);
-          } else {
-            buffer.push(255);
-          }
+          buffer.push(255);
         }
       } else {
         for index in (&frame.index_stream).into_iter() {
@@ -48,13 +42,7 @@ impl Gif {
           buffer.push(color.red.try_into().unwrap());
           buffer.push(color.green.try_into().unwrap());
           buffer.push(color.blue.try_into().unwrap());
-          if frame.gcd.transparent_color_flag
-            && index == (&frame.gcd.transparent_color_index.try_into().unwrap())
-          {
-            buffer.push(0);
-          } else {
-            buffer.push(255);
-          }
+          buffer.push(255);
         }
       }
       buffers.push(Buffer::from(buffer));
