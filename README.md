@@ -12,6 +12,8 @@
 npm i @chi_eee/gif-decoder
 ```
 
+https://www.npmjs.com/package/@chi_eee/gif-decoder
+
 # Usage
 
 ```js
