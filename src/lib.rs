@@ -5,12 +5,17 @@ use napi::{Env, Error, JsNumber, Result, Task};
 use napi_derive::napi;
 
 use byteorder::{ByteOrder, LittleEndian};
-use std::collections::HashMap;
-use std::process::exit;
-mod DataHelper;
-use DataHelper::BitReader;
+use std::ops::IndexMut;
 
-//
+const MAX_STACK_SIZE: u16 = 4096;
+
+fn shl_or(val: u16, shift: usize, def: u16) -> u16 {
+  [val << (shift & 15), def][((shift & !15) != 0) as usize]
+}
+fn shr_or(val: u16, shift: usize, def: u16) -> u16 {
+  [val >> (shift & 15), def][((shift & !15) != 0) as usize]
+}
+
 #[derive(Default)]
 #[napi(js_name = "Gif")]
 struct Gif {
@@ -321,142 +326,114 @@ impl Decoder {
       Self::increment_offset(offset, length);
       parsed_frame.local_table = local_color_vector;
     }
-    // End
+    let null_code: i32 = -1;
+    let npix = gif.lsd.width * gif.lsd.height;
 
-    // Image Data
-    #[cfg(debug_assertions)]
-    println!("Image Data Offset: {}", *offset);
-
+    // Initialize GIF data stream decoder.
     let lzw_minimum_code_size = contents[*offset];
     Self::increment_offset(offset, 1);
 
-    // Data sub block section
-    let mut data_sub_blocks_count = contents[*offset];
-    Self::increment_offset(offset, 1);
-
-    let clear_code = Self::shl_or(offset, 2, (lzw_minimum_code_size - 1).into(), 0);
+    let clear_code = shl_or(1, lzw_minimum_code_size as usize, 0);
     let eoi_code = clear_code + 1;
     let mut available = clear_code + 2;
+    let mut old_code = null_code;
+    let mut code_size: usize = (lzw_minimum_code_size + 1) as usize;
+    let mut code_mask = shl_or(1, code_size, 0) - 1;
+
+    let mut prefix: Vec<u16> = vec![0; MAX_STACK_SIZE as usize]; // No need to fill with 0 (already filled)
+    let mut suffix: Vec<u8> = vec![0; MAX_STACK_SIZE as usize];
+    for code in 0..clear_code {
+        *suffix.index_mut(code as usize) = code as u8;
+    }
+
+    let mut pixel_stack: Vec<u8> = vec![0; (MAX_STACK_SIZE + 1) as usize];
+    let mut top = 0;
 
     let mut index_stream: Vec<u8> = Vec::new();
 
-    let mut code_table: HashMap<usize, Vec<u8>> = HashMap::new();
-    let mut code_stream: Vec<u16> = Vec::new();
-    for n in 0..=eoi_code {
-      if n < clear_code {
-        code_table.insert(n as usize, vec![n as u8]);
-      } else {
-        code_table.insert(n as usize, vec![]);
-      }
-    }
+    let mut block: &[u8] = &[0];
 
-    let mut last_code = eoi_code;
-    let mut size: usize = (lzw_minimum_code_size + 1).into();
-    let mut grow_code = clear_code - 1;
+    let mut in_code = 0;
+    let mut first: u8 = 0;
+    let mut datum = 0;
+    let mut bits = 0;
+    let mut data_sub_blocks_count = 0;
+    let mut bi = 0;
 
-    let mut is_initalized = false;
+    let mut n = 0;
+    while n < npix {
+        if top == 0 {
+            if (bits < code_size) {
+                if data_sub_blocks_count == 0 {
+                    data_sub_blocks_count = contents[*offset];
+                    Self::increment_offset(offset, 1);
+                    if data_sub_blocks_count <= 0 {
+                        break;
+                    }
+                    let offset_add: usize = *offset + data_sub_blocks_count as usize;
+                    block = &contents[*offset..offset_add];
 
-    let mut br = BitReader::new();
-    loop {
-      let offset_add: usize = *offset + data_sub_blocks_count as usize;
-      let sliced_bytes = &contents[*offset..offset_add];
-
-      br.push_bytes(&sliced_bytes);
-      loop {
-        let code = br.read_bits(size).unwrap();
-        if code > available || code == eoi_code {
-          code_stream.push(code);
-          break;
-        } else if code == clear_code {
-          code_stream = Vec::new();
-          code_table = HashMap::new();
-          for n in 0..=eoi_code {
-            if n < clear_code {
-              code_table.insert(n as usize, vec![n as u8]);
-            } else {
-              code_table.insert(n as usize, vec![]);
-            }
-          }
-          last_code = eoi_code;
-          size = (lzw_minimum_code_size + 1).into();
-          grow_code = (2 << size - 1) - 1;
-          is_initalized = false;
-        } else if !is_initalized {
-          match code_table.get(&(code as usize)) {
-            Some(codes) => {
-              index_stream.extend(codes);
-            }
-            None => {
-              println!("invalid code: {}", code);
-              exit(1);
-            }
-          }
-          is_initalized = true;
-        } else {
-          let mut k: u8 = 0;
-          let prev_code = code_stream[code_stream.len() - 1];
-          if code <= last_code {
-            match code_table.get(&(code as usize)) {
-              Some(codes) => {
-                index_stream.extend(codes);
-                k = codes[0];
-              }
-              None => {
-                println!("invalid code: {}", code);
-                exit(2);
-              }
-            }
-          } else {
-            match code_table.get(&(prev_code as usize)) {
-              Some(codes) => {
-                k = codes[0];
-                index_stream.extend(codes);
-                index_stream.push(k);
-              }
-              None => {
-                println!("invalid code: {}", prev_code);
-                exit(3);
-              }
-            }
-          }
-          if last_code < 0xFFF {
-            match code_table.get(&(prev_code as usize)) {
-              Some(codes) => {
-                last_code += 1;
-                let mut last_code_table = codes.to_vec();
-                last_code_table.push(k);
-                code_table.insert(last_code as usize, last_code_table);
-                if last_code == grow_code && last_code < 0xFFF {
-                  size += 1;
-                  grow_code = (2 << size - 1) - 1;
+                    *offset = offset_add;
+                    bi = 0;
                 }
-              }
-              None => {
-                println!("invalid code: {}", prev_code);
-                exit(4);
-              }
+                datum += shl_or(block[bi as usize] as u16 & 0xFF, bits, 0);
+                bits += 8;
+                bi += 1;
+                data_sub_blocks_count -= 1;
+                continue;
             }
-          }
-        }
-        available += 1;
-        code_stream.push(code);
-        let has_bits = match br.has_bits(size) {
-          Some(has_bits) => has_bits,
-          None => {
-            exit(0x0); ///////////todo
-          }
-        };
-        if !has_bits {
-          break;
-        }
-      }
+            let mut code = datum & code_mask;
+            datum = shr_or(datum, code_size, 0);
+            bits -= code_size;
+            if code > available || code == eoi_code {
+                break;
+            }
+            if code == clear_code {
+                code_size = (lzw_minimum_code_size + 1) as usize;
+                code_mask = shl_or(1, code_size, 0) - 1;
+                available = clear_code + 2;
+                old_code = null_code;
+                continue;
+            }
+            if old_code == null_code {
+                index_stream.push(suffix[code as usize]);
+                old_code = code as i32;
+                first = code as u8;
+                continue;
+            }
+            in_code = code;
+            if code == available {
+                *pixel_stack.index_mut(top as usize) = first as u8;
+                top += 1;
+                code = old_code as u16;
+            }
+            while code > clear_code {
+                *pixel_stack.index_mut(top as usize) = suffix[code as usize];
+                top += 1;
+                code = prefix[code as usize];
+            }
+            first = suffix[code as usize] & 0xFF;
 
-      *offset = offset_add;
-      data_sub_blocks_count = contents[*offset];
-      Self::increment_offset(offset, 1);
-      if data_sub_blocks_count == 0 {
-        break;
-      }
+            *pixel_stack.index_mut(top as usize) = first;
+            top += 1;
+
+            if available < MAX_STACK_SIZE {
+                *prefix.index_mut(available as usize) = old_code as u16;
+                *suffix.index_mut(available as usize) = first;
+                available += 1;
+                if (available & code_mask) == 0 && available < MAX_STACK_SIZE {
+                    code_size += 1;
+                    code_mask += available;
+                }
+            }
+            old_code = in_code as i32;
+        }
+        top -= 1;
+        index_stream.push(pixel_stack[top]);
+        n += 1;
+    }
+    for _ in index_stream.len()..npix as usize {
+        index_stream.push(0);
     }
     parsed_frame.index_stream = index_stream;
   }
