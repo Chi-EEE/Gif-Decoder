@@ -27,6 +27,7 @@ struct Gif {
 
 #[napi]
 impl Gif {
+  // Goes through every index stream of the frames and makes a vector of buffers from them 
   #[napi]
   pub fn process_frames(&mut self) -> Vec<Buffer> {
     let mut buffers: Vec<Buffer> = Vec::new();
