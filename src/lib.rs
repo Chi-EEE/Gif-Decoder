@@ -182,33 +182,42 @@ impl Decoder {
       Self::increment_offset(&mut offset, length);
       gif.global_table = global_color_vector;
     }
-    // End
+    let mut done = false;
     loop {
       let introducer = contents[offset];
-      if introducer == 0x3B {
-        break;
-      }
       Self::increment_offset(&mut offset, 1);
-      if introducer == 0x2C {
-        Self::handle_image_descriptor(&mut offset, &mut gif, contents);
-        continue;
-      }
-      let label = contents[offset];
-      Self::increment_offset(&mut offset, 1);
-      match label {
-        0xF9 => {
-          Self::handle_graphic_control_extension(&mut offset, &mut gif, contents);
+      match introducer {
+        0x2C => {
+          // Image Descriptor
+          Self::handle_image_descriptor(&mut offset, &mut gif, contents);
         }
-        0x01 => {
-          Self::handle_plain_text_extension(&mut offset, &mut gif, contents);
+        0x21 => {
+          let label = contents[offset];
+          Self::increment_offset(&mut offset, 1);
+          match label {
+            0xF9 => {
+              Self::handle_graphic_control_extension(&mut offset, &mut gif, contents);
+            }
+            0x01 => {
+              Self::handle_plain_text_extension(&mut offset, &mut gif, contents);
+            }
+            0xFF => {
+              Self::handle_application_extension(&mut offset, &mut gif, contents);
+            }
+            0xFE => {
+              Self::handle_comment_extension(&mut offset, &mut gif, contents);
+            }
+            _ => {}
+          }
         }
-        0xFF => {
-          Self::handle_application_extension(&mut offset, &mut gif, contents);
+        0x3B => {
+          done = true;
         }
-        0xFE => {
-          Self::handle_comment_extension(&mut offset, &mut gif, contents);
-        }
+        0x00 => {}
         _ => {}
+      }
+      if done {
+        break;
       }
     }
     // Trailer
@@ -217,22 +226,21 @@ impl Decoder {
     return Ok(gif);
   }
   fn skip(offset: &mut usize, contents: &[u8]) {
-    let mut data_sub_blocks_count = contents[*offset];
-    Self::increment_offset(offset, 1);
     loop {
-      Self::increment_offset(offset, data_sub_blocks_count.into());
-      data_sub_blocks_count = contents[*offset];
+      let data_sub_blocks_count = contents[*offset];
       Self::increment_offset(offset, 1);
-      if data_sub_blocks_count == 0x00 {
+      if data_sub_blocks_count > 0 {
+        Self::increment_offset(offset, data_sub_blocks_count.into());
+      } else {
+        break;
+      }
+      if *offset >= contents.len() - 1 {
         break;
       }
     }
   }
   fn increment_offset(offset: &mut usize, amount: usize) {
     *offset += amount;
-  }
-  fn shl_or(offset: &mut usize, val: u16, shift: usize, def: u16) -> u16 {
-    [val << (shift & 15), def][((shift & !7) != 0) as usize]
   }
   fn handle_logical_screen_descriptor(gif: &mut Gif, contents: &[u8]) {
     // Logic Screen Descriptor
@@ -343,7 +351,7 @@ impl Decoder {
     let mut prefix: Vec<u16> = vec![0; MAX_STACK_SIZE as usize]; // No need to fill with 0 (already filled)
     let mut suffix: Vec<u8> = vec![0; MAX_STACK_SIZE as usize];
     for code in 0..clear_code {
-        *suffix.index_mut(code as usize) = code as u8;
+      *suffix.index_mut(code as usize) = code as u8;
     }
 
     let mut pixel_stack: Vec<u8> = vec![0; (MAX_STACK_SIZE + 1) as usize];
@@ -362,78 +370,78 @@ impl Decoder {
 
     let mut n = 0;
     while n < npix {
-        if top == 0 {
-            if (bits < code_size) {
-                if data_sub_blocks_count == 0 {
-                    data_sub_blocks_count = contents[*offset];
-                    Self::increment_offset(offset, 1);
-                    if data_sub_blocks_count <= 0 {
-                        break;
-                    }
-                    let offset_add: usize = *offset + data_sub_blocks_count as usize;
-                    block = &contents[*offset..offset_add];
+      if top == 0 {
+        if (bits < code_size) {
+          if data_sub_blocks_count == 0 {
+            data_sub_blocks_count = contents[*offset];
+            Self::increment_offset(offset, 1);
+            if data_sub_blocks_count <= 0 {
+              break;
+            }
+            let offset_add: usize = *offset + data_sub_blocks_count as usize;
+            block = &contents[*offset..offset_add];
 
-                    *offset = offset_add;
-                    bi = 0;
-                }
-                datum += shl_or(block[bi as usize] as u16 & 0xFF, bits, 0);
-                bits += 8;
-                bi += 1;
-                data_sub_blocks_count -= 1;
-                continue;
-            }
-            let mut code = datum & code_mask;
-            datum = shr_or(datum, code_size, 0);
-            bits -= code_size;
-            if code > available || code == eoi_code {
-                break;
-            }
-            if code == clear_code {
-                code_size = (lzw_minimum_code_size + 1) as usize;
-                code_mask = shl_or(1, code_size, 0) - 1;
-                available = clear_code + 2;
-                old_code = null_code;
-                continue;
-            }
-            if old_code == null_code {
-                index_stream.push(suffix[code as usize]);
-                old_code = code as i32;
-                first = code as u8;
-                continue;
-            }
-            in_code = code;
-            if code == available {
-                *pixel_stack.index_mut(top as usize) = first as u8;
-                top += 1;
-                code = old_code as u16;
-            }
-            while code > clear_code {
-                *pixel_stack.index_mut(top as usize) = suffix[code as usize];
-                top += 1;
-                code = prefix[code as usize];
-            }
-            first = suffix[code as usize] & 0xFF;
-
-            *pixel_stack.index_mut(top as usize) = first;
-            top += 1;
-
-            if available < MAX_STACK_SIZE {
-                *prefix.index_mut(available as usize) = old_code as u16;
-                *suffix.index_mut(available as usize) = first;
-                available += 1;
-                if (available & code_mask) == 0 && available < MAX_STACK_SIZE {
-                    code_size += 1;
-                    code_mask += available;
-                }
-            }
-            old_code = in_code as i32;
+            *offset = offset_add;
+            bi = 0;
+          }
+          datum += shl_or(block[bi as usize] as u16 & 0xFF, bits, 0);
+          bits += 8;
+          bi += 1;
+          data_sub_blocks_count -= 1;
+          continue;
         }
-        top -= 1;
-        index_stream.push(pixel_stack[top]);
-        n += 1;
+        let mut code = datum & code_mask;
+        datum = shr_or(datum, code_size, 0);
+        bits -= code_size;
+        if code > available || code == eoi_code {
+          break;
+        }
+        if code == clear_code {
+          code_size = (lzw_minimum_code_size + 1) as usize;
+          code_mask = shl_or(1, code_size, 0) - 1;
+          available = clear_code + 2;
+          old_code = null_code;
+          continue;
+        }
+        if old_code == null_code {
+          index_stream.push(suffix[code as usize]);
+          old_code = code as i32;
+          first = code as u8;
+          continue;
+        }
+        in_code = code;
+        if code == available {
+          *pixel_stack.index_mut(top as usize) = first as u8;
+          top += 1;
+          code = old_code as u16;
+        }
+        while code > clear_code {
+          *pixel_stack.index_mut(top as usize) = suffix[code as usize];
+          top += 1;
+          code = prefix[code as usize];
+        }
+        first = suffix[code as usize] & 0xFF;
+
+        *pixel_stack.index_mut(top as usize) = first;
+        top += 1;
+
+        if available < MAX_STACK_SIZE {
+          *prefix.index_mut(available as usize) = old_code as u16;
+          *suffix.index_mut(available as usize) = first;
+          available += 1;
+          if (available & code_mask) == 0 && available < MAX_STACK_SIZE {
+            code_size += 1;
+            code_mask += available;
+          }
+        }
+        old_code = in_code as i32;
+      }
+      top -= 1;
+      index_stream.push(pixel_stack[top]);
+      n += 1;
     }
     for _ in index_stream.len()..npix as usize {
-        index_stream.push(0);
+      index_stream.push(0);
     }
     parsed_frame.index_stream = index_stream;
   }
