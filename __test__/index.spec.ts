@@ -56,6 +56,7 @@ test('TeaTime.gif: Frame Length is 61', (t) => {
   const gif = Decoder.decode('./gifs/TeaTime.gif')
   t.is(gif.frames.length, 61)
 })
+
 test('forsenDisco.gif: Frame Length is 60', (t) => {
   const gif = Decoder.decode('./gifs/forsenDisco.gif')
   t.is(gif.frames.length, 60)

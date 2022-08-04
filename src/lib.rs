@@ -27,40 +27,30 @@ struct Gif {
 
 #[napi]
 impl Gif {
-  // Goes through every index stream of the frames and makes a vector of buffers from them 
+  // Goes through every index stream of the frames and makes a vector of buffers from them
   #[napi]
   pub fn process_frames(&mut self) -> Vec<Buffer> {
     let mut buffers: Vec<Buffer> = Vec::new();
     let frames_iter = self.frames.iter();
     for frame in frames_iter {
       let mut buffer: Vec<u8> = Vec::new();
+      let color_table;
       if frame.im.local_color_table_flag {
-        for index in (&frame.index_stream).into_iter() {
-          let color = frame.local_table.get(*index as usize).unwrap();
-          buffer.push(color.red.try_into().unwrap());
-          buffer.push(color.green.try_into().unwrap());
-          buffer.push(color.blue.try_into().unwrap());
-          if frame.gcd.transparent_color_flag
-            && index == (&frame.gcd.transparent_color_index.try_into().unwrap())
-          {
-            buffer.push(0);
-          } else {
-            buffer.push(255);
-          }
-        }
+        color_table = &frame.local_table;
       } else {
-        for index in (&frame.index_stream).into_iter() {
-          let color = self.global_table.get(*index as usize).unwrap();
-          buffer.push(color.red.try_into().unwrap());
-          buffer.push(color.green.try_into().unwrap());
-          buffer.push(color.blue.try_into().unwrap());
-          if frame.gcd.transparent_color_flag
-            && index == (&frame.gcd.transparent_color_index.try_into().unwrap())
-          {
-            buffer.push(0);
-          } else {
-            buffer.push(255);
-          }
+        color_table = &self.global_table;
+      }
+      for index in (&frame.index_stream).into_iter() {
+        let color = color_table.get(*index as usize).unwrap();
+        buffer.push(color.red.try_into().unwrap());
+        buffer.push(color.green.try_into().unwrap());
+        buffer.push(color.blue.try_into().unwrap());
+        if frame.gcd.transparent_color_flag
+          && index == (&frame.gcd.transparent_color_index.try_into().unwrap())
+        {
+          buffer.push(0);
+        } else {
+          buffer.push(255);
         }
       }
       buffers.push(Buffer::from(buffer));
@@ -444,7 +434,46 @@ impl Decoder {
     for _ in index_stream.len()..npix as usize {
       index_stream.push(0);
     }
+    if parsed_frame.im.interface_flag {
+      index_stream = Self::deinterface(&mut index_stream, parsed_frame.im.width as usize);
+    }
+    
     parsed_frame.index_stream = index_stream;
+  }
+  // deinterlace function from https://github.com/shachaf/jsgif
+  fn deinterface(index_stream: &mut Vec<u8>, width: usize) -> Vec<u8> {
+    let mut new_index_stream = vec![0; index_stream.len()];
+    let rows = index_stream.len() / width;
+
+    fn cp_row(
+      index_stream: &mut Vec<u8>,
+      width: usize,
+      new_index_stream: &mut Vec<u8>,
+      to_row: usize,
+      from_row: usize,
+    ) {
+      let from_pixels = &index_stream[from_row * width..(from_row + 1) * width];
+      new_index_stream.splice(width..to_row * width, from_pixels.to_vec());
+    }
+
+    // See appendix E.
+    let offsets = [0, 4, 2, 1];
+    let steps = [8, 8, 4, 2];
+
+    let mut from_row = 0;
+    for pass in 0..4 {
+      let mut to_row = offsets[pass];
+      loop {
+        if to_row >= rows {
+          break;
+        }
+        cp_row(index_stream, width, &mut new_index_stream, to_row, from_row);
+        from_row += 1;
+        to_row += steps[pass];
+      }
+    }
+
+    return new_index_stream;
   }
   fn handle_plain_text_extension(offset: &mut usize, gif: &mut Gif, contents: &[u8]) {
     // Plain Text Extension (Optional)
