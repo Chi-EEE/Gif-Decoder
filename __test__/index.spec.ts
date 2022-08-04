@@ -32,8 +32,8 @@ test('Dancing.gif: Frame 1: Local Color Table Flag is false', (t) => {
   t.is(gif.frames[0].im.localColorTableFlag, false)
 })
 
-test('Clap.gif: Frame Length is 2', (t) => {
-  const gif = Decoder.decode('./gifs/Clap.gif')
+test('clap.gif: Frame Length is 2', (t) => {
+  const gif = Decoder.decode('./gifs/clap.gif')
   t.is(gif.frames.length, 2)
 })
 
