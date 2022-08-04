@@ -31,3 +31,32 @@ test('Dancing.gif: Frame 1: Local Color Table Flag is false', (t) => {
   const gif = Decoder.decode('./gifs/Dancing.gif')
   t.is(gif.frames[0].im.localColorTableFlag, false)
 })
+
+test('Clap.gif: Frame Length is 2', (t) => {
+  const gif = Decoder.decode('./gifs/Clap.gif')
+  t.is(gif.frames.length, 2)
+})
+
+test('NOIDONTTHINKSO.gif: Frame Length is 59', (t) => {
+  const gif = Decoder.decode('./gifs/NOIDONTTHINKSO.gif')
+  t.is(gif.frames.length, 59)
+})
+
+test('pepeMeltdown.gif: Frame Length is 10', (t) => {
+  const gif = Decoder.decode('./gifs/pepeMeltdown.gif')
+  t.is(gif.frames.length, 10)
+})
+
+test('monkaOmega.gif: Frame Length is 6', (t) => {
+  const gif = Decoder.decode('./gifs/monkaOmega.gif')
+  t.is(gif.frames.length, 6)
+})
+
+test('TeaTime.gif: Frame Length is 61', (t) => {
+  const gif = Decoder.decode('./gifs/TeaTime.gif')
+  t.is(gif.frames.length, 61)
+})
+test('forsenDisco.gif: Frame Length is 60', (t) => {
+  const gif = Decoder.decode('./gifs/forsenDisco.gif')
+  t.is(gif.frames.length, 60)
+})

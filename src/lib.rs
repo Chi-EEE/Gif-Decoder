@@ -9,11 +9,11 @@ use std::ops::IndexMut;
 
 const MAX_STACK_SIZE: u16 = 4096;
 
-fn shl_or(val: u16, shift: usize, def: u16) -> u16 {
-  [val << (shift & 15), def][((shift & !15) != 0) as usize]
+fn shl_or(val: u32, shift: usize, def: u32) -> u32 {
+  [val << (shift & 31), def][((shift & !31) != 0) as usize]
 }
-fn shr_or(val: u16, shift: usize, def: u16) -> u16 {
-  [val >> (shift & 15), def][((shift & !15) != 0) as usize]
+fn shr_or(val: u32, shift: usize, def: u32) -> u32 {
+  [val >> (shift & 31), def][((shift & !31) != 0) as usize]
 }
 
 #[derive(Default)]
@@ -364,8 +364,8 @@ impl Decoder {
 
     let mut in_code = 0;
     let mut first: u8 = 0;
-    let mut datum = 0;
-    let mut bits = 0;
+    let mut datum: u32 = 0;
+    let mut bits: usize = 0;
     let mut data_sub_blocks_count = 0;
     let mut bi = 0;
 
@@ -385,7 +385,7 @@ impl Decoder {
             *offset = offset_add;
             bi = 0;
           }
-          datum += shl_or(block[bi as usize] as u16 & 0xFF, bits, 0);
+          datum += shl_or(block[bi as usize] as u32 & 0xFF, bits, 0);
           bits += 8;
           bi += 1;
           data_sub_blocks_count -= 1;
@@ -414,23 +414,23 @@ impl Decoder {
         if code == available {
           *pixel_stack.index_mut(top as usize) = first as u8;
           top += 1;
-          code = old_code as u16;
+          code = old_code as u32;
         }
         while code > clear_code {
           *pixel_stack.index_mut(top as usize) = suffix[code as usize];
           top += 1;
-          code = prefix[code as usize];
+          code = prefix[code as usize] as u32;
         }
         first = suffix[code as usize] & 0xFF;
 
         *pixel_stack.index_mut(top as usize) = first;
         top += 1;
 
-        if available < MAX_STACK_SIZE {
+        if available < MAX_STACK_SIZE as u32 {
           *prefix.index_mut(available as usize) = old_code as u16;
           *suffix.index_mut(available as usize) = first;
           available += 1;
-          if (available & code_mask) == 0 && available < MAX_STACK_SIZE {
+          if (available & code_mask) == 0 && available < MAX_STACK_SIZE as u32 {
             code_size += 1;
             code_mask += available;
           }
