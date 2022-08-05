@@ -19,5 +19,5 @@ https://www.npmjs.com/package/@chi_eee/gif-decoder
 ```js
 const { Decoder } = require('@chi_eee/gif-decoder')
 
-const gif = Decoder.decode('sample.gif');
+const gif = Decoder.decode('sample.gif')
 ```

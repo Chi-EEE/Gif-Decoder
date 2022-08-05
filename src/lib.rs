@@ -55,9 +55,10 @@ impl Gif {
             }
           }
           None => {
-            for _ in 0..4 {
+            for _ in 0..3 {
               buffer.push(255);
             }
+            buffer.push(0);
           }
         }
       }
