@@ -41,16 +41,24 @@ impl Gif {
         color_table = &self.global_table;
       }
       for index in (&frame.index_stream).into_iter() {
-        let color = color_table.get(*index as usize).unwrap();
-        buffer.push(color.red.try_into().unwrap());
-        buffer.push(color.green.try_into().unwrap());
-        buffer.push(color.blue.try_into().unwrap());
-        if frame.gcd.transparent_color_flag
-          && index == (&frame.gcd.transparent_color_index.try_into().unwrap())
-        {
-          buffer.push(0);
-        } else {
-          buffer.push(255);
+        match color_table.get(*index as usize) {
+          Some(color) => {
+            buffer.push(color.red.try_into().unwrap());
+            buffer.push(color.green.try_into().unwrap());
+            buffer.push(color.blue.try_into().unwrap());
+            if frame.gcd.transparent_color_flag
+              && index == (&frame.gcd.transparent_color_index.try_into().unwrap())
+            {
+              buffer.push(0);
+            } else {
+              buffer.push(255);
+            }
+          }
+          None => {
+            for _ in 0..4 {
+              buffer.push(255);
+            }
+          }
         }
       }
       buffers.push(Buffer::from(buffer));
@@ -437,7 +445,6 @@ impl Decoder {
     if parsed_frame.im.interface_flag {
       index_stream = Self::deinterface(&mut index_stream, parsed_frame.im.width as usize);
     }
-    
     parsed_frame.index_stream = index_stream;
   }
   // deinterlace function from https://github.com/shachaf/jsgif
