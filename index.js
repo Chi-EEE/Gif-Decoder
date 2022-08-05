@@ -218,7 +218,8 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { Gif, Decoder } = nativeBinding
+const { Gif, Frame, Decoder } = nativeBinding
 
 module.exports.Gif = Gif
+module.exports.Frame = Frame
 module.exports.Decoder = Decoder

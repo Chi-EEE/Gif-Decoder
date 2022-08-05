@@ -13,21 +13,13 @@ export interface LogicalScreenDescriptor {
   backgroundColorIndex: number
   pixelAspectRatio: number
 }
-export interface Frame {
-  gcd: GraphicsControlExtension
-  im: ImageDescriptor
-  localTable: Array<Color>
-  indexStream: Array<number>
-}
 export interface ImageDescriptor {
   left: number
   top: number
   width: number
   height: number
-  localColorTableFlag: boolean
   interfaceFlag: boolean
   sortFlag: boolean
-  localColorTableSize: number
 }
 export interface GraphicsControlExtension {
   disposalMethod: number
@@ -46,7 +38,14 @@ export class Gif {
   lsd: LogicalScreenDescriptor
   globalTable: Array<Color>
   frames: Array<Frame>
-  processFrames(): Array<Buffer>
+  decodeFrames(): Array<Buffer>
+}
+export class Frame {
+  gcd: GraphicsControlExtension
+  im: ImageDescriptor
+  colorTable: Array<Color>
+  indexStream: Array<number>
+  decode(): Buffer
 }
 /** */
 export class Decoder {

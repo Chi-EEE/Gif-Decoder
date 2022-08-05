@@ -1,6 +1,6 @@
 #![deny(clippy::all)]
 
-use napi::bindgen_prelude::Buffer;
+use napi::bindgen_prelude::{Buffer, FromNapiValue};
 use napi::{Env, Error, JsNumber, Result, Task};
 use napi_derive::napi;
 
@@ -29,40 +29,11 @@ struct Gif {
 impl Gif {
   // Goes through every index stream of the frames and makes a vector of buffers from them
   #[napi]
-  pub fn process_frames(&mut self) -> Vec<Buffer> {
+  pub fn decode_frames(&mut self) -> Vec<Buffer> {
     let mut buffers: Vec<Buffer> = Vec::new();
     let frames_iter = self.frames.iter();
     for frame in frames_iter {
-      let mut buffer: Vec<u8> = Vec::new();
-      let color_table;
-      if frame.im.local_color_table_flag {
-        color_table = &frame.local_table;
-      } else {
-        color_table = &self.global_table;
-      }
-      for index in (&frame.index_stream).into_iter() {
-        match color_table.get(*index as usize) {
-          Some(color) => {
-            buffer.push(color.red.try_into().unwrap());
-            buffer.push(color.green.try_into().unwrap());
-            buffer.push(color.blue.try_into().unwrap());
-            if frame.gcd.transparent_color_flag
-              && index == (&frame.gcd.transparent_color_index.try_into().unwrap())
-            {
-              buffer.push(0);
-            } else {
-              buffer.push(255);
-            }
-          }
-          None => {
-            for _ in 0..3 {
-              buffer.push(255);
-            }
-            buffer.push(0);
-          }
-        }
-      }
-      buffers.push(Buffer::from(buffer));
+      buffers.push(frame.decode());
     }
     return buffers;
   }
@@ -82,12 +53,66 @@ pub struct LogicalScreenDescriptor {
 }
 
 #[derive(Default, Clone)]
-#[napi(object)]
+#[napi(js_name = "Frame")]
 pub struct Frame {
   pub gcd: GraphicsControlExtension,
   pub im: ImageDescriptor,
-  pub local_table: Vec<Color>, // Check localColorTableFlag before using this
+  pub color_table: Vec<Color>,
   pub index_stream: Vec<u8>,
+}
+
+#[napi]
+impl Frame {
+  #[napi]
+  pub fn decode(&self) -> Buffer {
+    let mut buffer: Vec<u8> = Vec::new();
+    for index in (&self.index_stream).into_iter() {
+      match self.color_table.get(*index as usize) {
+        Some(color) => {
+          buffer.push(color.red.try_into().unwrap());
+          buffer.push(color.green.try_into().unwrap());
+          buffer.push(color.blue.try_into().unwrap());
+          if self.gcd.transparent_color_flag
+            && index == (&self.gcd.transparent_color_index.try_into().unwrap())
+          {
+            buffer.push(0);
+          } else {
+            buffer.push(255);
+          }
+        }
+        None => {
+          for _ in 0..3 {
+            buffer.push(255);
+          }
+          buffer.push(0);
+        }
+      }
+    }
+    Buffer::from(buffer)
+  }
+}
+
+impl FromNapiValue for Frame {
+  fn from_unknown(value: napi::JsUnknown) -> Result<Self> {
+    Ok(Self {
+      gcd: GraphicsControlExtension::default(),
+      im: ImageDescriptor::default(),
+      color_table: Vec::default(),
+      index_stream: Vec::default(),
+    })
+  }
+
+  unsafe fn from_napi_value(
+    env: napi::sys::napi_env,
+    napi_val: napi::sys::napi_value,
+  ) -> Result<Self> {
+    Ok(Self {
+      gcd: GraphicsControlExtension::default(),
+      im: ImageDescriptor::default(),
+      color_table: Vec::default(),
+      index_stream: Vec::default(),
+    })
+  }
 }
 
 #[derive(Default, Clone)]
@@ -97,10 +122,8 @@ pub struct ImageDescriptor {
   pub top: u32,
   pub width: u32,
   pub height: u32,
-  pub local_color_table_flag: bool,
   pub interface_flag: bool,
   pub sort_flag: bool,
-  pub local_color_table_size: u32,
 }
 
 #[derive(Default, Clone)]
@@ -309,17 +332,15 @@ impl Decoder {
     Self::increment_offset(offset, 2);
 
     let packed_field = contents[*offset];
-    parsed_frame.im.local_color_table_flag = (packed_field & 0b1000_0000) != 0;
     parsed_frame.im.interface_flag = (packed_field & 0b0100_0000) != 0;
     parsed_frame.im.sort_flag = (packed_field & 0b0010_0000) != 0;
     // let _ = (packed_field & 0b0001_1000) as u8; // Future use
-    parsed_frame.im.local_color_table_size = (packed_field & 0b0000_0111) as u32;
     Self::increment_offset(offset, 1);
     // End
 
-    // Local Color Table
-    if parsed_frame.im.local_color_table_flag {
-      let length: usize = 3 * 2 << parsed_frame.im.local_color_table_size;
+    // Local Color Table (Check local color table flag)
+    if (packed_field & 0b1000_0000) != 0 {
+      let length: usize = 3 * 2 << (packed_field & 0b0000_0111) as u32;
       let mut i: usize = *offset;
       let mut local_color_vector: Vec<Color> = Vec::new();
 
@@ -332,7 +353,9 @@ impl Decoder {
         i = i + 3;
       }
       Self::increment_offset(offset, length);
-      parsed_frame.local_table = local_color_vector;
+      parsed_frame.color_table = local_color_vector;
+    } else {
+      parsed_frame.color_table = gif.global_table.to_vec();
     }
     let null_code: i32 = -1;
     let npix = gif.lsd.width * gif.lsd.height;
