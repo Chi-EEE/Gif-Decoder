@@ -358,7 +358,7 @@ impl Decoder {
       parsed_frame.color_table = gif.global_table.to_vec();
     }
     let null_code: i32 = -1;
-    let npix = gif.lsd.width * gif.lsd.height;
+    let npix = parsed_frame.im.width * parsed_frame.im.height;
 
     // Initialize GIF data stream decoder.
     let lzw_minimum_code_size = contents[*offset];
