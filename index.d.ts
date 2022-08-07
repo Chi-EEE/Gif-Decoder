@@ -18,7 +18,7 @@ export interface ImageDescriptor {
   top: number
   width: number
   height: number
-  interfaceFlag: boolean
+  interlaceFlag: boolean
   sortFlag: boolean
 }
 export interface GraphicsControlExtension {

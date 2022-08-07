@@ -122,7 +122,7 @@ pub struct ImageDescriptor {
   pub top: u32,
   pub width: u32,
   pub height: u32,
-  pub interface_flag: bool,
+  pub interlace_flag: bool,
   pub sort_flag: bool,
 }
 
@@ -294,7 +294,10 @@ impl Decoder {
     Self::increment_offset(offset, 1);
 
     let packed_field = contents[*offset];
-    parsed_frame.gcd.disposal_method = (packed_field & 0b0001_1100) as u32;
+    parsed_frame.gcd.disposal_method = shr_or((packed_field & 0b0001_1100) as u32, 2, 0);
+    if (parsed_frame.gcd.disposal_method == 0) {
+      parsed_frame.gcd.disposal_method = 1; // elect to keep old image if discretionary
+    }
     parsed_frame.gcd.user_input_flag = (packed_field & 0b0000_0010) != 0;
     parsed_frame.gcd.transparent_color_flag = (packed_field & 0b0000_0001) != 0;
     Self::increment_offset(offset, 1);
@@ -332,7 +335,7 @@ impl Decoder {
     Self::increment_offset(offset, 2);
 
     let packed_field = contents[*offset];
-    parsed_frame.im.interface_flag = (packed_field & 0b0100_0000) != 0;
+    parsed_frame.im.interlace_flag = (packed_field & 0b0100_0000) != 0;
     parsed_frame.im.sort_flag = (packed_field & 0b0010_0000) != 0;
     // let _ = (packed_field & 0b0001_1000) as u8; // Future use
     Self::increment_offset(offset, 1);
@@ -466,13 +469,13 @@ impl Decoder {
     for _ in index_stream.len()..npix as usize {
       index_stream.push(0);
     }
-    if parsed_frame.im.interface_flag {
-      index_stream = Self::deinterface(&mut index_stream, parsed_frame.im.width as usize);
+    if parsed_frame.im.interlace_flag {
+      index_stream = Self::deinterlace(&mut index_stream, parsed_frame.im.width as usize);
     }
     parsed_frame.index_stream = index_stream;
   }
   // deinterlace function from https://github.com/shachaf/jsgif
-  fn deinterface(index_stream: &mut Vec<u8>, width: usize) -> Vec<u8> {
+  fn deinterlace(index_stream: &mut Vec<u8>, width: usize) -> Vec<u8> {
     let mut new_index_stream = vec![0; index_stream.len()];
     let rows = index_stream.len() / width;
 
