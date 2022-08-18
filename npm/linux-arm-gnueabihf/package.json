@@ -1,6 +1,6 @@
 {
   "name": "@chi_eee/gif-decoder-linux-arm-gnueabihf",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "os": [
     "linux"
   ],

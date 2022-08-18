@@ -1,6 +1,6 @@
 {
   "name": "@chi_eee/gif-decoder-android-arm64",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "os": [
     "android"
   ],
