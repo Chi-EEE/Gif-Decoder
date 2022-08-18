@@ -46,13 +46,14 @@ impl Gif {
   #[napi]
   pub fn decode_frame(&self, frame: &Frame) -> Buffer {
     let mut buffer: Vec<u8> = Vec::new();
+
     let mut pass: usize = 1;
     let mut inc: usize = 8;
     let mut iline: usize = 0;
     for n in 0..frame.im.height as usize {
       let mut line = n;
       if frame.im.interlace_flag {
-        if iline >= self.lsd.height as usize {
+        if iline >= frame.im.height as usize {
           pass += 1;
           match pass {
             2 => {
