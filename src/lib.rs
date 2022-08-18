@@ -9,11 +9,11 @@ use std::ops::IndexMut;
 
 const MAX_STACK_SIZE: u16 = 4096;
 
-fn shl_or(val: u32, shift: usize, def: u32) -> u32 {
-  [val << (shift & 31), def][((shift & !31) != 0) as usize]
+fn shl_or(val: u64, shift: usize, def: u64) -> u64 {
+  [val << (shift & 63), def][((shift & !63) != 0) as usize]
 }
-fn shr_or(val: u32, shift: usize, def: u32) -> u32 {
-  [val >> (shift & 31), def][((shift & !31) != 0) as usize]
+fn shr_or(val: u64, shift: usize, def: u64) -> u64 {
+  [val >> (shift & 63), def][((shift & !63) != 0) as usize]
 }
 
 #[derive(Default)]
@@ -338,7 +338,7 @@ impl Decoder {
     Self::increment_offset(offset, 1);
 
     let packed_field = contents[*offset];
-    parsed_frame.gcd.disposal_method = shr_or((packed_field & 0b0001_1100) as u32, 2, 0);
+    parsed_frame.gcd.disposal_method = shr_or((packed_field & 0b0001_1100) as u64, 2, 0) as u32;
     if (parsed_frame.gcd.disposal_method == 0) {
       parsed_frame.gcd.disposal_method = 1; // elect to keep old image if discretionary
     }
@@ -433,7 +433,7 @@ impl Decoder {
 
     let mut in_code = 0;
     let mut first: u8 = 0;
-    let mut datum: u32 = 0;
+    let mut datum: u64 = 0;
     let mut bits: usize = 0;
     let mut data_sub_blocks_count = 0;
     let mut bi = 0;
@@ -454,7 +454,7 @@ impl Decoder {
             *offset = offset_add;
             bi = 0;
           }
-          datum += shl_or(block[bi as usize] as u32 & 0xFF, bits, 0);
+          datum += shl_or(block[bi as usize] as u64 & 0xFF, bits, 0);
           bits += 8;
           bi += 1;
           data_sub_blocks_count -= 1;
@@ -483,23 +483,23 @@ impl Decoder {
         if code == available {
           *pixel_stack.index_mut(top as usize) = first as u8;
           top += 1;
-          code = old_code as u32;
+          code = old_code as u64;
         }
         while code > clear_code {
           *pixel_stack.index_mut(top as usize) = suffix[code as usize];
           top += 1;
-          code = prefix[code as usize] as u32;
+          code = prefix[code as usize] as u64;
         }
         first = suffix[code as usize] & 0xFF;
 
         *pixel_stack.index_mut(top as usize) = first;
         top += 1;
 
-        if available < MAX_STACK_SIZE as u32 {
+        if available < MAX_STACK_SIZE as u64 {
           *prefix.index_mut(available as usize) = old_code as u16;
           *suffix.index_mut(available as usize) = first;
           available += 1;
-          if (available & code_mask) == 0 && available < MAX_STACK_SIZE as u32 {
+          if (available & code_mask) == 0 && available < MAX_STACK_SIZE as u64 {
             code_size += 1;
             code_mask += available;
           }

@@ -69,6 +69,7 @@
     "@napi-rs/package-template": "^1.0.0"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^0.1.28",
     "@napi-rs/cli": "^2.9.0",
     "@swc-node/register": "^1.5.1",
     "@types/node": "^18.7.6",

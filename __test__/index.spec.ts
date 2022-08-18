@@ -40,6 +40,9 @@ test('Correct Frame Count', (t) => {
 
   gif = Decoder.decode('./gifs/BBoomer.gif') // Interlace Gif
   t.is(gif.frames.length, 13)
+
+  gif = Decoder.decode('./gifs/YESITHINKSO.gif') // 64 bit datum gif
+  t.is(gif.frames.length, 162)
 })
 
 test('Decoding Individual Frames', (t) => {
@@ -67,10 +70,13 @@ test('Decoding Individual Frames', (t) => {
   gif = Decoder.decode('./gifs/forsenEnter.gif')
   t.is(gif.decodeFrame(gif.frames[33]).length, 3136)
 
-  gif = Decoder.decode('./gifs/shadowchanHeart.0')
+  gif = Decoder.decode('./gifs/shadowchanHeart.0') // 0 file gif
   t.is(gif.decodeFrame(gif.frames[0]).length, 3136)
 
   gif = Decoder.decode('./gifs/BBoomer.gif') // Interlace Gif
+  t.is(gif.decodeFrame(gif.frames[0]).length, 3136)
+
+  gif = Decoder.decode('./gifs/YESITHINKSO.gif') // 64 bit datum gif
   t.is(gif.decodeFrame(gif.frames[0]).length, 3136)
 })
 
