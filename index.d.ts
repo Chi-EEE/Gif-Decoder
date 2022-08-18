@@ -38,14 +38,22 @@ export class Gif {
   lsd: LogicalScreenDescriptor
   globalTable: Array<Color>
   frames: Array<Frame>
+  /**
+  * This function goes through every index stream of the frames and makes a vector of buffers from them.
+  */
   decodeFrames(): Array<Buffer>
+  /**
+  * This function individually decodes the frame inputted into the function
+  *
+  * Source: https://gist.github.com/devunwired/4479231#file-gifdecoder-java-L359
+  */
+  decodeFrame(frame: Frame): Buffer
 }
 export class Frame {
   gcd: GraphicsControlExtension
   im: ImageDescriptor
   colorTable: Array<Color>
   indexStream: Array<number>
-  decode(): Buffer
 }
 /** */
 export class Decoder {

@@ -34,32 +34,44 @@ test('Correct Frame Count', (t) => {
 
   gif = Decoder.decode('./gifs/forsenEnter.gif')
   t.is(gif.frames.length, 34)
+
+  gif = Decoder.decode('./gifs/shadowchanHeart.0')
+  t.is(gif.frames.length, 23)
+
+  gif = Decoder.decode('./gifs/BBoomer.gif') // Interlace Gif
+  t.is(gif.frames.length, 13)
 })
 
 test('Decoding Individual Frames', (t) => {
   let gif = Decoder.decode('./gifs/sample_2_animation.gif')
-  t.notDeepEqual(gif.frames[2].decode(), null)
+  t.is(gif.decodeFrame(gif.frames[0]).length, 1276)
 
   gif = Decoder.decode('./gifs/clap.gif')
-  t.notDeepEqual(gif.frames[1].decode(), null)
+  t.is(gif.decodeFrame(gif.frames[1]).length, 3136)
 
   gif = Decoder.decode('./gifs/NOIDONTTHINKSO.gif')
-  t.notDeepEqual(gif.frames[58].decode(), null)
+  t.is(gif.decodeFrame(gif.frames[58]).length, 3136)
 
   gif = Decoder.decode('./gifs/pepeMeltdown.gif')
-  t.notDeepEqual(gif.frames[9].decode(), null)
+  t.is(gif.decodeFrame(gif.frames[9]).length, 50176)
 
   gif = Decoder.decode('./gifs/monkaX.gif')
-  t.notDeepEqual(gif.frames[5].decode(), null)
+  t.is(gif.decodeFrame(gif.frames[5]).length, 3136)
 
   gif = Decoder.decode('./gifs/TeaTime.gif')
-  t.notDeepEqual(gif.frames[60].decode(), null)
+  t.is(gif.decodeFrame(gif.frames[60]).length, 3136)
 
   gif = Decoder.decode('./gifs/forsenDisco.gif')
-  t.notDeepEqual(gif.frames[59].decode(), null)
+  t.is(gif.decodeFrame(gif.frames[59]).length, 3136)
 
   gif = Decoder.decode('./gifs/forsenEnter.gif')
-  t.notDeepEqual(gif.frames[33].decode(), null)
+  t.is(gif.decodeFrame(gif.frames[33]).length, 3136)
+
+  gif = Decoder.decode('./gifs/shadowchanHeart.0')
+  t.is(gif.decodeFrame(gif.frames[0]).length, 3136)
+
+  gif = Decoder.decode('./gifs/BBoomer.gif') // Interlace Gif
+  t.is(gif.decodeFrame(gif.frames[0]).length, 3136)
 })
 
 test('sample_2_animation.gif: Frame 3: Top is 2', (t) => {
