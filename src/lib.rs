@@ -40,13 +40,12 @@ impl Gif {
   }
   /**
    * This function individually decodes the frame inputted into the function
-   *
-   * Source: https://gist.github.com/devunwired/4479231#file-gifdecoder-java-L359
    */
   #[napi]
   pub fn decode_frame(&self, frame: &Frame) -> Buffer {
     let mut buffer: Vec<u8> = Vec::new();
 
+    // Source: https://gist.github.com/devunwired/4479231#file-gifdecoder-java-L359
     let mut pass: usize = 1;
     let mut inc: usize = 8;
     let mut iline: usize = 0;
