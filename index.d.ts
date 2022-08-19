@@ -38,9 +38,6 @@ export class Gif {
   lsd: LogicalScreenDescriptor
   globalTable: Array<Color>
   frames: Array<Frame>
-  /**
-  * This function goes through every index stream of the frames and makes a vector of buffers from them.
-  */
   decodeFrames(): Array<Buffer>
   /**
   * This function individually decodes the frame inputted into the function
@@ -52,6 +49,7 @@ export class Frame {
   im: ImageDescriptor
   colorTable: Array<Color>
   indexStream: Array<number>
+  decode(): Buffer
 }
 /** */
 export class Decoder {

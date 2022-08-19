@@ -27,89 +27,15 @@ struct Gif {
 
 #[napi]
 impl Gif {
-  /**
-   * This function goes through every index stream of the frames and makes a vector of buffers from them.
-   */
+  // Goes through every index stream of the frames and makes a vector of buffers from them
   #[napi]
-  pub fn decode_frames(&self) -> Vec<Buffer> {
+  pub fn decode_frames(&mut self) -> Vec<Buffer> {
     let mut buffers: Vec<Buffer> = Vec::new();
-    for frame in self.frames.iter() {
-      buffers.push(self.decode_frame(frame));
+    let frames_iter = self.frames.iter();
+    for frame in frames_iter {
+      buffers.push(frame.decode());
     }
     return buffers;
-  }
-  /**
-   * This function individually decodes the frame inputted into the function
-   */
-  #[napi]
-  pub fn decode_frame(&self, frame: &Frame) -> Buffer {
-    let mut buffer: Vec<u8> = Vec::new();
-
-    // Source: https://gist.github.com/devunwired/4479231#file-gifdecoder-java-L359
-    let mut pass: usize = 1;
-    let mut inc: usize = 8;
-    let mut iline: usize = 0;
-    for n in 0..frame.im.height as usize {
-      let mut line = n;
-      if frame.im.interlace_flag {
-        if iline >= frame.im.height as usize {
-          pass += 1;
-          match pass {
-            2 => {
-              iline = 4;
-            }
-            3 => {
-              iline = 2;
-              inc = 4;
-            }
-            4 => {
-              iline = 1;
-              inc = 2;
-            }
-            _ => {}
-          }
-        }
-        line = iline;
-        iline += inc;
-      }
-      line += frame.im.top as usize;
-      if line < self.lsd.height as usize {
-        let k = line * self.lsd.width as usize;
-        let mut dx = k + frame.im.left as usize; // start of line in dest
-        let mut dlim = dx + frame.im.width as usize; // end of dest line
-        if (k + self.lsd.width as usize) < dlim {
-          dlim = k + self.lsd.width as usize; // past dest edge
-        }
-        let mut sx = n * frame.im.width as usize; // start of line in source
-        while dx < dlim {
-          // map color and insert in destination
-          let index = &(&frame.index_stream)[sx];
-          sx += 1;
-          match frame.color_table.get(*index as usize) {
-            Some(color) => {
-              buffer.push(color.red.try_into().unwrap());
-              buffer.push(color.green.try_into().unwrap());
-              buffer.push(color.blue.try_into().unwrap());
-              if frame.gcd.transparent_color_flag
-                && index == (&frame.gcd.transparent_color_index.try_into().unwrap())
-              {
-                buffer.push(0);
-              } else {
-                buffer.push(255);
-              }
-            }
-            None => {
-              for _ in 0..3 {
-                buffer.push(255);
-              }
-              buffer.push(0);
-            }
-          }
-          dx += 1;
-        }
-      }
-    }
-    Buffer::from(buffer)
   }
 }
 
@@ -133,6 +59,37 @@ pub struct Frame {
   pub im: ImageDescriptor,
   pub color_table: Vec<Color>,
   pub index_stream: Vec<u8>,
+}
+
+#[napi]
+impl Frame {
+  #[napi]
+  pub fn decode(&self) -> Buffer {
+    let mut buffer: Vec<u8> = Vec::new();
+    for index in (&self.index_stream).into_iter() {
+      match self.color_table.get(*index as usize) {
+        Some(color) => {
+          buffer.push(color.red.try_into().unwrap());
+          buffer.push(color.green.try_into().unwrap());
+          buffer.push(color.blue.try_into().unwrap());
+          if self.gcd.transparent_color_flag
+            && index == (&self.gcd.transparent_color_index.try_into().unwrap())
+          {
+            buffer.push(0);
+          } else {
+            buffer.push(255);
+          }
+        }
+        None => {
+          for _ in 0..3 {
+            buffer.push(255);
+          }
+          buffer.push(0);
+        }
+      }
+    }
+    Buffer::from(buffer)
+  }
 }
 
 impl FromNapiValue for Frame {
@@ -512,7 +469,34 @@ impl Decoder {
     for _ in index_stream.len()..npix as usize {
       index_stream.push(0);
     }
+    if parsed_frame.im.interlace_flag {
+      index_stream = Self::deinterlace(&mut index_stream, parsed_frame.im.width as usize);
+    }
     parsed_frame.index_stream = index_stream;
+  }
+  // deinterlace function from https://github.com/matt-way/gifuct-js/blob/master/src/deinterlace.js
+  fn deinterlace(index_stream: &mut Vec<u8>, width: usize) -> Vec<u8> {
+    let mut new_index_stream = vec![0; index_stream.len()];
+    let rows = index_stream.len() / width;
+
+    // See appendix E.
+    let offsets = [0, 4, 2, 1];
+    let steps = [8, 8, 4, 2];
+
+    let mut from_row = 0;
+    for pass in 0..4 {
+      let mut to_row = offsets[pass];
+      while to_row < rows {
+        let from_pixels = &index_stream[from_row * width..(from_row + 1) * width];
+        new_index_stream.splice(
+          (to_row * width)..(to_row * width) + width,
+          from_pixels.to_vec(),
+        );
+        from_row += 1;
+        to_row += steps[pass];
+      }
+    }
+    return new_index_stream;
   }
   fn handle_plain_text_extension(offset: &mut usize, gif: &mut Gif, contents: &[u8]) {
     // Plain Text Extension (Optional)
