@@ -39,10 +39,6 @@ export class Gif {
   globalTable: Array<Color>
   frames: Array<Frame>
   decodeFrames(): Array<Buffer>
-  /**
-  * This function individually decodes the frame inputted into the function
-  */
-  decodeFrame(frame: Frame): Buffer
 }
 export class Frame {
   gcd: GraphicsControlExtension
