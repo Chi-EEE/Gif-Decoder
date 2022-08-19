@@ -1,6 +1,6 @@
 {
   "name": "@chi_eee/gif-decoder-linux-arm64-musl",
-  "version": "1.4.4",
+  "version": "1.5.0",
   "os": [
     "linux"
   ],
