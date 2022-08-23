@@ -1,6 +1,6 @@
 {
   "name": "@chi_eee/gif-decoder",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Decodes Gif Files",
   "main": "index.js",
   "repository": {
