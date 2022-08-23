@@ -159,29 +159,39 @@ impl Decoder {
 
     let contents = contents.as_slice();
     {
-      let mut signature: String = String::new();
-      match String::from_utf8(contents[0..3].to_vec()) {
-        Ok(parsed_signature) => {
-          signature = parsed_signature;
+      match contents.get(0..3) {
+        Some(signature_bytes) => match String::from_utf8(signature_bytes.to_vec()) {
+          Ok(parsed_signature) => {
+            if parsed_signature != "GIF" {
+              return Err(Error::from_reason(
+                "The file's signature is not GIF got: ".to_string() + &parsed_signature,
+              ));
+            }
+          }
+          Err(err) => return Err(Error::from_reason(err.to_string())),
+        },
+        None => {
+          return Err(Error::from_reason(
+            "Unable to get file signature, the file is corrupted".to_string(),
+          ))
         }
-        Err(err) => return Err(Error::from_reason(err.to_string())),
-      }
-      if signature != "GIF" {
-        return Err(Error::from_reason(
-          "Error: The file's signature is not GIF got: ".to_string() + &signature,
-        ));
       }
     }
 
     let mut gif = Gif::default();
-    let mut version: String = String::new();
-    match String::from_utf8(contents[3..6].to_vec()) {
-      Ok(parsed_version) => {
-        version = parsed_version;
+    match contents.get(3..6) {
+      Some(version_bytes) => match String::from_utf8(version_bytes.to_vec()) {
+        Ok(parsed_version) => {
+          gif.version = parsed_version;
+        }
+        Err(err) => return Err(Error::from_reason(err.to_string())),
+      },
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get file's version, the file is corrupted".to_string(),
+        ))
       }
-      Err(err) => return Err(Error::from_reason(err.to_string())),
     }
-    gif.version = version;
 
     Self::handle_logical_screen_descriptor(&mut gif, contents);
 
@@ -207,7 +217,14 @@ impl Decoder {
     }
     let mut done = false;
     loop {
-      let introducer = contents[offset];
+      let introducer = match contents.get(offset) {
+        Some(introducer) => introducer,
+        None => {
+          return Err(Error::from_reason(
+            "Unable to get introducer, the file is corrupted".to_string(),
+          ))
+        }
+      };
       Self::increment_offset(&mut offset, 1);
       match introducer {
         0x2C => {
@@ -215,7 +232,14 @@ impl Decoder {
           Self::handle_image_descriptor(&mut offset, &mut gif, contents);
         }
         0x21 => {
-          let label = contents[offset];
+          let label = match contents.get(offset) {
+            Some(introducer) => introducer,
+            None => {
+              return Err(Error::from_reason(
+                "Unable to get label, the file is corrupted".to_string(),
+              ))
+            }
+          };
           Self::increment_offset(&mut offset, 1);
           match label {
             0xF9 => {
