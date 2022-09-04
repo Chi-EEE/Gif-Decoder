@@ -193,7 +193,10 @@ impl Decoder {
       }
     }
 
-    Self::handle_logical_screen_descriptor(&mut gif, contents);
+    match Self::handle_logical_screen_descriptor(&mut gif, contents) {
+      Ok(_) => {}
+      Err(error) => return Err(error),
+    }
 
     let mut offset: usize = 13;
 
@@ -205,10 +208,46 @@ impl Decoder {
       let mut global_color_vector: Vec<Color> = Vec::new();
 
       while i < offset + length {
+        let red;
+        let green;
+        let blue;
+        match contents.get(i) {
+          Some(red_byte) => {
+            red = *red_byte;
+          }
+          None => {
+            return Err(Error::from_reason(
+              "Unable to get red in handle_logical_screen_descriptor, the file is corrupted"
+                .to_string(),
+            ))
+          }
+        };
+        match contents.get(i + 1) {
+          Some(green_byte) => {
+            green = *green_byte;
+          }
+          None => {
+            return Err(Error::from_reason(
+              "Unable to get green in handle_logical_screen_descriptor, the file is corrupted"
+                .to_string(),
+            ))
+          }
+        };
+        match contents.get(i + 2) {
+          Some(blue_byte) => {
+            blue = *blue_byte;
+          }
+          None => {
+            return Err(Error::from_reason(
+              "Unable to get blue in handle_logical_screen_descriptor, the file is corrupted"
+                .to_string(),
+            ))
+          }
+        };
         global_color_vector.push(Color {
-          red: (contents[i] as u32),
-          green: (contents[i + 1] as u32),
-          blue: (contents[i + 2] as u32),
+          red: (red as u32),
+          green: (green as u32),
+          blue: (blue as u32),
         });
         i = i + 3;
       }
@@ -229,7 +268,10 @@ impl Decoder {
       match introducer {
         0x2C => {
           // Image Descriptor
-          Self::handle_image_descriptor(&mut offset, &mut gif, contents);
+          match Self::handle_image_descriptor(&mut offset, &mut gif, contents) {
+            Ok(_) => {}
+            Err(error) => return Err(error),
+          };
         }
         0x21 => {
           let label = match contents.get(offset) {
@@ -243,16 +285,28 @@ impl Decoder {
           Self::increment_offset(&mut offset, 1);
           match label {
             0xF9 => {
-              Self::handle_graphic_control_extension(&mut offset, &mut gif, contents);
+              match Self::handle_graphic_control_extension(&mut offset, &mut gif, contents) {
+                Ok(_) => {}
+                Err(error) => return Err(error),
+              };
             }
             0x01 => {
-              Self::handle_plain_text_extension(&mut offset, &mut gif, contents);
+              match Self::handle_plain_text_extension(&mut offset, &mut gif, contents) {
+                Ok(_) => {}
+                Err(error) => return Err(error),
+              };
             }
             0xFF => {
-              Self::handle_application_extension(&mut offset, &mut gif, contents);
+              match Self::handle_application_extension(&mut offset, &mut gif, contents) {
+                Ok(_) => {}
+                Err(error) => return Err(error),
+              };
             }
             0xFE => {
-              Self::handle_comment_extension(&mut offset, &mut gif, contents);
+              match Self::handle_comment_extension(&mut offset, &mut gif, contents) {
+                Ok(_) => {}
+                Err(error) => return Err(error),
+              };
             }
             _ => {}
           }
@@ -272,9 +326,19 @@ impl Decoder {
     println!("End of file.");
     return Ok(gif);
   }
-  fn skip(offset: &mut usize, contents: &[u8]) {
+  fn skip(offset: &mut usize, contents: &[u8]) -> Result<()> {
     loop {
-      let data_sub_blocks_count = contents[*offset];
+      let data_sub_blocks_count;
+      match contents.get(*offset) {
+        Some(data_sub_blocks_count_byte) => {
+          data_sub_blocks_count = *data_sub_blocks_count_byte;
+        }
+        None => {
+          return Err(Error::from_reason(
+            "Unable to get data_sub_blocks_count in skip, the file is corrupted".to_string(),
+          ))
+        }
+      };
       Self::increment_offset(offset, 1);
       if data_sub_blocks_count > 0 {
         Self::increment_offset(offset, data_sub_blocks_count.into());
@@ -285,60 +349,162 @@ impl Decoder {
         break;
       }
     }
+    Ok(())
   }
   fn increment_offset(offset: &mut usize, amount: usize) {
     *offset += amount;
   }
-  fn handle_logical_screen_descriptor(gif: &mut Gif, contents: &[u8]) {
+  fn handle_logical_screen_descriptor(gif: &mut Gif, contents: &[u8]) -> Result<()> {
     // Logic Screen Descriptor
     #[cfg(debug_assertions)]
     println!("Logic Screen Descriptor Offset: {}", 6);
 
-    gif.lsd.width = LittleEndian::read_u16(&contents[6..8]) as u32; // width
-    gif.lsd.height = LittleEndian::read_u16(&contents[8..10]) as u32; // height
+    match contents.get(6..8) {
+      Some(width_bytes) => {
+        let width = LittleEndian::read_u16(width_bytes);
+        gif.lsd.width = width as u32;
+      }
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get gif width in handle_logical_screen_descriptor, the file is corrupted"
+            .to_string(),
+        ))
+      }
+    };
+    match contents.get(8..10) {
+      Some(height_bytes) => {
+        let height = LittleEndian::read_u16(height_bytes);
+        gif.lsd.height = height as u32;
+      }
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get gif height in handle_logical_screen_descriptor, the file is corrupted"
+            .to_string(),
+        ))
+      }
+    };
 
-    let packed_field = contents[10];
+    let packed_field;
+    match contents.get(10) {
+      Some(packed_field_bytes) => {
+        packed_field = *packed_field_bytes;
+      }
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get packed_field in handle_logical_screen_descriptor, the file is corrupted"
+            .to_string(),
+        ))
+      }
+    };
 
     gif.lsd.global_color_flag = (packed_field & 0b1000_0000) != 0; // global_color_flag
     gif.lsd.color_resolution = (packed_field & 0b0111_0000) as u32; // color_resolution
     gif.lsd.sorted_flag = (packed_field & 0b0000_1000) != 0; // sorted_flag
     gif.lsd.global_color_size = (packed_field & 0b0000_0111) as u32; // global_color_size
 
-    gif.lsd.background_color_index = contents[11] as u32; // background_color_index
-    gif.lsd.pixel_aspect_ratio = contents[12] as u32; // pixel_aspect_ratio
+    match contents.get(11) {
+      Some(background_color_index_byte) => {
+        gif.lsd.background_color_index = *background_color_index_byte as u32;
+      }
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get background_color_index in handle_logical_screen_descriptor, the file is corrupted".to_string(),
+        ))
+      }
+    };
+    match contents.get(12) {
+      Some(pixel_aspect_ratio_byte) => {
+        gif.lsd.pixel_aspect_ratio = *pixel_aspect_ratio_byte as u32;
+      }
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get pixel_aspect_ratio in handle_logical_screen_descriptor, the file is corrupted".to_string(),
+        ))
+      }
+    };
+    return Ok(());
   }
-  fn handle_graphic_control_extension(offset: &mut usize, gif: &mut Gif, contents: &[u8]) {
+  fn handle_graphic_control_extension(
+    offset: &mut usize,
+    gif: &mut Gif,
+    contents: &[u8],
+  ) -> Result<()> {
     // Graphical Control Extension
     #[cfg(debug_assertions)]
     println!("Graphic Control Extension Offset: {}", *offset);
 
     let mut parsed_frame: Frame = Frame::default();
 
-    let byte_size = contents[*offset];
+    match contents.get(*offset) {
+      Some(_) => {}
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get byte_size in handle_graphic_control_extension, the file is corrupted"
+            .to_string(),
+        ))
+      }
+    }; // Get byte size (I dont know what this is used for)
     Self::increment_offset(offset, 1);
 
-    let packed_field = contents[*offset];
+    let packed_field: u8;
+    match contents.get(*offset) {
+      Some(packed_field_bytes) => {
+        packed_field = *packed_field_bytes;
+      }
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get packed_field in handle_graphic_control_extension, the file is corrupted"
+            .to_string(),
+        ))
+      }
+    };
     parsed_frame.gcd.disposal_method = shr_or((packed_field & 0b0001_1100) as u32, 2, 0);
-    if (parsed_frame.gcd.disposal_method == 0) {
+    if parsed_frame.gcd.disposal_method == 0 {
       parsed_frame.gcd.disposal_method = 1; // elect to keep old image if discretionary
     }
     parsed_frame.gcd.user_input_flag = (packed_field & 0b0000_0010) != 0;
     parsed_frame.gcd.transparent_color_flag = (packed_field & 0b0000_0001) != 0;
     Self::increment_offset(offset, 1);
 
-    parsed_frame.gcd.delay_time = LittleEndian::read_u16(&contents[*offset..*offset + 2]) as u32;
+    match contents.get(*offset..*offset + 2) {
+      Some(delay_time_bytes) => {
+        parsed_frame.gcd.delay_time = LittleEndian::read_u16(delay_time_bytes) as u32;
+      }
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get delay_time in handle_graphic_control_extension, the file is corrupted"
+            .to_string(),
+        ))
+      }
+    };
     Self::increment_offset(offset, 2);
 
-    parsed_frame.gcd.transparent_color_index = contents[*offset] as u32;
+    match contents.get(*offset) {
+      Some(transparent_color_index_bytes) => {
+        parsed_frame.gcd.transparent_color_index = *transparent_color_index_bytes as u32;
+      }
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get transparent_color_index in handle_graphic_control_extension, the file is corrupted".to_string(),
+        ))
+      }
+    };
     Self::increment_offset(offset, 1);
 
-    let block_terminator = contents[*offset]; // This must be 00 ///////////////////////////////////////////////////////////////////
+    match contents.get(*offset) {
+      Some(_) => {}
+      None => return Err(Error::from_reason(
+        "Unable to get block_terminator in handle_graphic_control_extension, the file is corrupted"
+          .to_string(),
+      )),
+    }; // Get block_terminator
     Self::increment_offset(offset, 1);
     // End
 
     gif.frames.push(parsed_frame);
+    Ok(())
   }
-  fn handle_image_descriptor(offset: &mut usize, gif: &mut Gif, contents: &[u8]) {
+  fn handle_image_descriptor(offset: &mut usize, gif: &mut Gif, contents: &[u8]) -> Result<()> {
     // Image Descriptor
     #[cfg(debug_assertions)]
     println!("Image Descriptor Offset: {}", *offset);
@@ -346,19 +512,67 @@ impl Decoder {
     let frame_index = gif.frames.len() - 1;
     let mut parsed_frame = &mut gif.frames[frame_index];
 
-    parsed_frame.im.left = LittleEndian::read_u16(&contents[*offset..*offset + 2]) as u32; // image_left
+    match contents.get(*offset..*offset + 2) {
+      Some(left_bytes) => {
+        parsed_frame.im.left = LittleEndian::read_u16(left_bytes) as u32;
+      }
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get image_left in handle_image_descriptor, the file is corrupted".to_string(),
+        ))
+      }
+    };
     Self::increment_offset(offset, 2);
 
-    parsed_frame.im.top = LittleEndian::read_u16(&contents[*offset..*offset + 2]) as u32; // image_top
+    match contents.get(*offset..*offset + 2) {
+      Some(top_bytes) => {
+        parsed_frame.im.top = LittleEndian::read_u16(top_bytes) as u32;
+      }
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get image_top in handle_image_descriptor, the file is corrupted".to_string(),
+        ))
+      }
+    };
     Self::increment_offset(offset, 2);
 
-    parsed_frame.im.width = LittleEndian::read_u16(&contents[*offset..*offset + 2]) as u32; // image_width
+    match contents.get(*offset..*offset + 2) {
+      Some(width_bytes) => {
+        parsed_frame.im.width = LittleEndian::read_u16(width_bytes) as u32;
+      }
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get image_width in handle_image_descriptor, the file is corrupted".to_string(),
+        ))
+      }
+    };
     Self::increment_offset(offset, 2);
 
-    parsed_frame.im.height = LittleEndian::read_u16(&contents[*offset..*offset + 2]) as u32; // image_height
+    match contents.get(*offset..*offset + 2) {
+      Some(height_bytes) => {
+        parsed_frame.im.height = LittleEndian::read_u16(height_bytes) as u32;
+      }
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get image_height in handle_image_descriptor, the file is corrupted"
+            .to_string(),
+        ))
+      }
+    };
     Self::increment_offset(offset, 2);
 
-    let packed_field = contents[*offset];
+    let packed_field;
+    match contents.get(*offset) {
+      Some(packed_field_byte) => {
+        packed_field = *packed_field_byte;
+      }
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get packed_field in handle_image_descriptor, the file is corrupted"
+            .to_string(),
+        ))
+      }
+    };
     parsed_frame.im.interlace_flag = (packed_field & 0b0100_0000) != 0;
     parsed_frame.im.sort_flag = (packed_field & 0b0010_0000) != 0;
     // let _ = (packed_field & 0b0001_1000) as u8; // Future use
@@ -372,10 +586,43 @@ impl Decoder {
       let mut local_color_vector: Vec<Color> = Vec::new();
 
       while i < *offset + length {
+        let red;
+        let green;
+        let blue;
+        match contents.get(i) {
+          Some(red_byte) => {
+            red = *red_byte;
+          }
+          None => {
+            return Err(Error::from_reason(
+              "Unable to get red in handle_image_descriptor, the file is corrupted".to_string(),
+            ))
+          }
+        };
+        match contents.get(i + 1) {
+          Some(green_byte) => {
+            green = *green_byte;
+          }
+          None => {
+            return Err(Error::from_reason(
+              "Unable to get green in handle_image_descriptor, the file is corrupted".to_string(),
+            ))
+          }
+        };
+        match contents.get(i + 2) {
+          Some(blue_byte) => {
+            blue = *blue_byte;
+          }
+          None => {
+            return Err(Error::from_reason(
+              "Unable to get blue in handle_image_descriptor, the file is corrupted".to_string(),
+            ))
+          }
+        };
         local_color_vector.push(Color {
-          red: (contents[i] as u32),
-          green: (contents[i + 1] as u32),
-          blue: (contents[i + 2] as u32),
+          red: (red as u32),
+          green: (green as u32),
+          blue: (blue as u32),
         });
         i = i + 3;
       }
@@ -388,7 +635,18 @@ impl Decoder {
     let npix = parsed_frame.im.width * parsed_frame.im.height;
 
     // Initialize GIF data stream decoder.
-    let lzw_minimum_code_size = contents[*offset];
+    let lzw_minimum_code_size;
+    match contents.get(*offset) {
+      Some(lzw_minimum_code_size_byte) => {
+        lzw_minimum_code_size = *lzw_minimum_code_size_byte;
+      }
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get lzw_minimum_code_size in handle_image_descriptor, the file is corrupted"
+            .to_string(),
+        ))
+      }
+    };
     Self::increment_offset(offset, 1);
 
     let clear_code = shl_or(1, lzw_minimum_code_size as usize, 0);
@@ -421,16 +679,35 @@ impl Decoder {
     let mut n = 0;
     while n < npix {
       if top == 0 {
-        if (bits < code_size) {
+        if bits < code_size {
           if data_sub_blocks_count == 0 {
-            data_sub_blocks_count = contents[*offset];
+            match contents.get(*offset) {
+			  Some(data_sub_blocks_count_byte) => {
+				data_sub_blocks_count = *data_sub_blocks_count_byte;
+			  }
+			  None => {
+				return Err(Error::from_reason(
+				  "Unable to get data_sub_blocks_count in handle_image_descriptor, the file is corrupted"
+					.to_string(),
+				))
+			  }
+			};
             Self::increment_offset(offset, 1);
             if data_sub_blocks_count <= 0 {
               break;
             }
             let offset_add: usize = *offset + data_sub_blocks_count as usize;
-            block = &contents[*offset..offset_add];
-
+            match contents.get(*offset..offset_add) {
+              Some(block_bytes) => {
+                block = block_bytes;
+              }
+              None => {
+                return Err(Error::from_reason(
+                  "Unable to get block in handle_image_descriptor, the file is corrupted"
+                    .to_string(),
+                ))
+              }
+            };
             *offset = offset_add;
             bi = 0;
           }
@@ -497,6 +774,7 @@ impl Decoder {
       index_stream = Self::deinterlace(&mut index_stream, parsed_frame.im.width as usize);
     }
     parsed_frame.index_stream = index_stream;
+    Ok(())
   }
   // deinterlace function from https://github.com/matt-way/gifuct-js/blob/master/src/deinterlace.js
   fn deinterlace(index_stream: &mut Vec<u8>, width: usize) -> Vec<u8> {
@@ -522,41 +800,87 @@ impl Decoder {
     }
     return new_index_stream;
   }
-  fn handle_plain_text_extension(offset: &mut usize, gif: &mut Gif, contents: &[u8]) {
+  fn handle_plain_text_extension(offset: &mut usize, gif: &mut Gif, contents: &[u8]) -> Result<()> {
     // Plain Text Extension (Optional)
     #[cfg(debug_assertions)]
     println!("Plain Text Extension Offset: {}", *offset);
 
-    let block_size: usize = contents[*offset].into();
+    let block_size;
+    match contents.get(*offset) {
+      Some(block_size_byte) => {
+        block_size = *block_size_byte as usize;
+      }
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get block_size in handle_plain_text_extension, the file is corrupted"
+            .to_string(),
+        ))
+      }
+    };
     Self::increment_offset(offset, 1 + block_size);
 
-    Self::skip(offset, contents);
+    match Self::skip(offset, contents) {
+      Ok(_) => {}
+      Err(error) => return Err(error),
+    };
+    Ok(())
   }
-  fn handle_application_extension(offset: &mut usize, gif: &mut Gif, contents: &[u8]) {
+  fn handle_application_extension(
+    offset: &mut usize,
+    gif: &mut Gif,
+    contents: &[u8],
+  ) -> Result<()> {
     // Application Extension (Optional)
     #[cfg(debug_assertions)]
     println!("Application Extension Offset: {}", *offset);
 
-    let block_size: usize = contents[*offset].into();
+    let block_size;
+    match contents.get(*offset) {
+      Some(block_size_byte) => {
+        block_size = *block_size_byte as usize;
+      }
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get block_size in handle_application_extension, the file is corrupted"
+            .to_string(),
+        ))
+      }
+    };
     Self::increment_offset(offset, 1);
 
     let mut application = String::from("");
     let length = *offset + block_size;
-    match String::from_utf8(contents[*offset..length].to_vec()) {
-      Ok(parsed_application) => {
-        application = parsed_application;
+    match contents.get(*offset..length) {
+      Some(application_bytes) => match String::from_utf8(application_bytes.to_vec()) {
+        Ok(parsed_application) => {
+          application = parsed_application;
+        }
+        Err(err) => println!("Attempt to get application failed: {}", err),
+      },
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get application in handle_application_extension, the file is corrupted"
+            .to_string(),
+        ))
       }
-      Err(err) => println!("Attempt to get application failed: {}", err),
-    }
+    };
     Self::increment_offset(offset, block_size);
 
-    Self::skip(offset, contents);
+    match Self::skip(offset, contents) {
+      Ok(_) => {}
+      Err(error) => return Err(error),
+    };
+    Ok(())
   }
-  fn handle_comment_extension(offset: &mut usize, gif: &mut Gif, contents: &[u8]) {
+  fn handle_comment_extension(offset: &mut usize, gif: &mut Gif, contents: &[u8]) -> Result<()> {
     // Comment Extension (Optional)
     #[cfg(debug_assertions)]
     println!("Comment Extension Offset: {}", *offset);
 
-    Self::skip(offset, contents);
+    match Self::skip(offset, contents) {
+      Ok(_) => {}
+      Err(error) => return Err(error),
+    };
+    Ok(())
   }
 }
