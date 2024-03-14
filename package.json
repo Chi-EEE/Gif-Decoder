@@ -66,7 +66,8 @@
 		"version": "napi version"
 	},
 	"dependencies": {
-		"@napi-rs/package-template": "^1.0.0"
+		"@napi-rs/package-template": "^1.0.0",
+		"@swc/core": "^1.4.8"
 	},
 	"devDependencies": {
 		"@napi-rs/canvas": "^0.1.28",
