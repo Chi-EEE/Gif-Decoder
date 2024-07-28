@@ -169,20 +169,22 @@ impl Decoder {
   }
 
   fn decode_internal(contents: &[u8]) -> Result<Gif> {
-    {
-      let mut signature: String = String::new();
-      match String::from_utf8(contents[0..3].to_vec()) {
-        Ok(parsed_signature) => {
-          signature = parsed_signature;
-        }
+    let signature = match contents.get(0..3) {
+      Some(signature_bytes) => match String::from_utf8(signature_bytes.to_vec()) {
+        Ok(parsed_signature) => parsed_signature,
         Err(err) => return Err(Error::from_reason(err.to_string())),
+      },
+      None => {
+        return Err(Error::from_reason(
+          "Unable to get file signature, the file is corrupted".to_string(),
+        ))
       }
-      if signature != "GIF" {
-        return Err(Error::from_reason(format!(
-          "Invalid file signature, got {}",
-          signature
-        )));
-      }
+    };
+    if signature != "GIF" {
+      return Err(Error::from_reason(format!(
+        "Invalid file signature, got {}",
+        signature
+      )));
     }
 
     let mut gif = Gif::default();
