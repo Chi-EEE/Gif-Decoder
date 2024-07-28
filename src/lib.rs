@@ -160,7 +160,7 @@ impl Decoder {
 
   #[napi]
   pub fn decode_buffer(buffer: Buffer) -> Result<Gif> {
-    let contents = buffer.to_vec();
+    let contents: Vec<u8> = buffer.into();
     let contents = contents.as_slice();
     return Self::decode_internal(contents);
   }
