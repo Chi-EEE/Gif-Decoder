@@ -17,13 +17,17 @@ https://www.npmjs.com/package/@chi_eee/gif-decoder
 ## Javascript:
 ```js
 const { Decoder } = require('@chi_eee/gif-decoder')
+const { readFileSync } = require('fs')
 
-const gif = Decoder.decode('sample.gif')
+const gif = Decoder.decodePath('sample.gif')
+const gif = Decoder.decodeBuffer(readFileSync('sample.gif'))
 ```
 
 ## Typescript:
 ```js
 import { Decoder } from '@chi_eee/gif-decoder';
+import { readFileSync } from 'fs'
 
-const gif = Decoder.decode('sample.gif')
+const gif = Decoder.decodePath('sample.gif')
+const gif = Decoder.decodeBuffer(readFileSync('sample.gif'))
 ```

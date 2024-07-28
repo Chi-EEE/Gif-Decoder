@@ -1,6 +1,6 @@
 {
   "name": "@chi_eee/gif-decoder-linux-x64-gnu",
-  "version": "1.5.7",
+  "version": "2.0.0",
   "os": [
     "linux"
   ],
@@ -11,7 +11,7 @@
   "files": [
     "gif-decoder.linux-x64-gnu.node"
   ],
-  "description": "Decodes Gif Files",
+  "description": "Decodes Gif buffers / files",
   "keywords": [
     "napi-rs",
     "NAPI",
@@ -28,7 +28,7 @@
     "registry": "https://registry.npmjs.org/",
     "access": "public"
   },
-  "repository": "https://github.com/HuuChiHuynh/Gif-Decoder.git",
+  "repository": "https://github.com/Chi-EEE/Gif-Decoder",
   "libc": [
     "glibc"
   ]

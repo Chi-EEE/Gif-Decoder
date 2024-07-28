@@ -143,6 +143,7 @@ pub struct Color {
   pub green: u32,
   pub blue: u32,
 }
+
 ///
 
 #[napi(js_name = "Decoder")]
@@ -151,30 +152,33 @@ struct Decoder {}
 #[napi]
 impl Decoder {
   #[napi]
-  pub fn decode(file_path: String) -> Result<Gif> {
-    let contents = match std::fs::read(&file_path) {
-      Ok(contents) => contents,
-      Err(err) => return Err(Error::from_reason(err.to_string())),
-    };
-
+  pub fn decode_path(file_path: String) -> Result<Gif> {
+    let contents = std::fs::read(file_path).expect("Something went wrong reading the file");
     let contents = contents.as_slice();
+    return Self::decode_internal(contents);
+  }
+
+  #[napi]
+  pub fn decode_buffer(buffer: Buffer) -> Result<Gif> {
+    let contents = buffer.to_vec();
+    let contents = contents.as_slice();
+    return Self::decode_internal(contents);
+  }
+
+  fn decode_internal(contents: &[u8]) -> Result<Gif> {
     {
-      match contents.get(0..3) {
-        Some(signature_bytes) => match String::from_utf8(signature_bytes.to_vec()) {
-          Ok(parsed_signature) => {
-            if parsed_signature != "GIF" {
-              return Err(Error::from_reason(
-                "The file's signature is not GIF got: ".to_string() + &parsed_signature,
-              ));
-            }
-          }
-          Err(err) => return Err(Error::from_reason(err.to_string())),
-        },
-        None => {
-          return Err(Error::from_reason(
-            "Unable to get file signature, the file is corrupted".to_string(),
-          ))
+      let mut signature: String = String::new();
+      match String::from_utf8(contents[0..3].to_vec()) {
+        Ok(parsed_signature) => {
+          signature = parsed_signature;
         }
+        Err(err) => return Err(Error::from_reason(err.to_string())),
+      }
+      if signature != "GIF" {
+        return Err(Error::from_reason(format!(
+          "Invalid file signature, got {}",
+          signature
+        )));
       }
     }
 

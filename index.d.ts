@@ -33,14 +33,14 @@ export interface Color {
   green: number
   blue: number
 }
-export class Gif {
+export declare class Gif {
   version: string
   lsd: LogicalScreenDescriptor
   globalTable: Array<Color>
   frames: Array<Frame>
   decodeFrames(): Array<Buffer>
 }
-export class Frame {
+export declare class Frame {
   gcd: GraphicsControlExtension
   im: ImageDescriptor
   colorTable: Array<Color>
@@ -48,6 +48,7 @@ export class Frame {
   decode(): Buffer
 }
 /** */
-export class Decoder {
-  static decode(filePath: string): Gif
+export declare class Decoder {
+  static decodePath(filePath: string): Gif
+  static decodeBuffer(buffer: Buffer): Gif
 }
