@@ -153,7 +153,10 @@ struct Decoder {}
 impl Decoder {
   #[napi]
   pub fn decode_path(file_path: String) -> Result<Gif> {
-    let contents = std::fs::read(file_path).expect("Something went wrong reading the file");
+    let contents = match std::fs::read(&file_path) {
+      Ok(contents) => contents,
+      Err(err) => return Err(Error::from_reason(err.to_string())),
+    };
     let contents = contents.as_slice();
     return Self::decode_internal(contents);
   }
