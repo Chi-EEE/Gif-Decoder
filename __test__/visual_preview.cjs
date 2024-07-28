@@ -9,7 +9,7 @@ if (existsSync(previewDirectory)) {
 }
 mkdirSync(previewDirectory);
 
-const gif = Decoder.decode('./gifs/TeaTime.gif')
+const gif = Decoder.decodePath('./gifs/TeaTime.gif')
 let buffers = gif.decodeFrames()
 
 const canvas = createCanvas(gif.lsd.width, gif.lsd.height)

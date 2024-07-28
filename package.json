@@ -61,9 +61,11 @@
     "lint": "oxlint .",
     "prepublishOnly": "napi prepublish -t npm",
     "test": "ava",
-    "version": "napi version"
+    "version": "napi version",
+    "preview_test": "node __test__/visual_preview.cjs"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^0.1.53",
     "@napi-rs/cli": "^2.18.4",
     "@swc-node/register": "^1.10.6",
     "@swc/core": "^1.6.13",
