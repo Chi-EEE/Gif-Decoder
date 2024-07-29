@@ -1160,7 +1160,12 @@ impl Decoder {
         Ok(parsed_application) => {
           application = parsed_application;
         }
-        Err(err) => println!("Attempt to get application failed: {}", err),
+        Err(err) => {
+          return Err(Error::from_reason(format!(
+            "Attempt to get application failed: {}",
+            err
+          )))
+        }
       },
       None => {
         return Err(Error::from_reason(
