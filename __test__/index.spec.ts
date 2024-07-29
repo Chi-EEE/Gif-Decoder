@@ -31,7 +31,6 @@ test('Correct Frame Count', (t) => {
   }
 })
 
-
 function decodeGifUsingBuffer(gif_file: string) {
   let gif_buffer = readFileSync(gif_file)
   let gif = Decoder.decodeBuffer(gif_buffer)
@@ -64,12 +63,15 @@ test('Decoding Individual Frames', (t) => {
   for (let gif_test_case of gif_test_cases_2) {
     let gif = Decoder.decodePath(gif_test_case.file)
     for (let i = 0; i < gif.frames.length; i++) {
-      t.is(gif.decodeFrame(i, {
-        implementDisposalPrevious: true,
-        storeCache: true,
-        disableDisposalMethods: false,
-        rawDecode: false,
-      }).length, gif_test_case.expected)
+      t.is(
+        gif.decodeFrame(i, {
+          implementDisposalPrevious: true,
+          storeCache: true,
+          disableDisposalMethods: false,
+          rawDecode: false,
+        }).length,
+        gif_test_case.expected,
+      )
     }
   }
 })
