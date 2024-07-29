@@ -16,6 +16,7 @@ if (one_file) {
     implementDisposalPrevious: true,
     storeCache: true,
     disableDisposalMethods: false,
+    rawDecode: false,
   })
 
   const canvas = createCanvas(gif.lsd.width, gif.lsd.height)
@@ -39,6 +40,7 @@ if (one_file) {
         implementDisposalPrevious: true,
         storeCache: true,
         disableDisposalMethods: false,
+        rawDecode: false,
       })
 
       const canvas = createCanvas(gif.lsd.width, gif.lsd.height)
