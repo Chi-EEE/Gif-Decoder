@@ -16,7 +16,8 @@ const gif_test_cases = [
   { file: './gifs/pepeMeltdown.gif', expected: 10 },
   { file: './gifs/monkaX.gif', expected: 6 },
   { file: './gifs/TeaTime.gif', expected: 61 },
-  { file: './gifs/forsenDisco.gif', expected: 60 },
+  { file: './gifs/forsenDisco.gif', expected: 24 },
+  { file: './gifs/forsenParty.gif', expected: 60 },
   { file: './gifs/forsenEnter.gif', expected: 34 },
   { file: './gifs/shadowchanHeart.0', expected: 23 },
   { file: './gifs/BBoomer.gif', expected: 13 }, // Interlace Gif
@@ -44,39 +45,28 @@ test('Correct Frame Count using Buffer', (t) => {
   }
 })
 
+const gif_test_cases_2 = [
+  { file: './gifs/sample_2_animation.gif', expected: 1276 },
+  { file: './gifs/clap.gif', expected: 3136 },
+  { file: './gifs/NOIDONTTHINKSO.gif', expected: 3136 },
+  { file: './gifs/pepeMeltdown.gif', expected: 50176 },
+  { file: './gifs/monkaX.gif', expected: 3136 },
+  { file: './gifs/TeaTime.gif', expected: 3136 },
+  { file: './gifs/forsenDisco.gif', expected: 50176 },
+  { file: './gifs/forsenParty.gif', expected: 3136 },
+  { file: './gifs/forsenEnter.gif', expected: 3136 },
+  { file: './gifs/shadowchanHeart.0', expected: 3136 },
+  { file: './gifs/BBoomer.gif', expected: 3136 }, // Interlace Gif
+  { file: './gifs/YESITHINKSO.gif', expected: 3136 }, // 64 bit datum gif
+]
+
 test('Decoding Individual Frames', (t) => {
-  let gif = Decoder.decodePath('./gifs/sample_2_animation.gif')
-  t.is(gif.frames[0].decode().length, 1276)
-
-  gif = Decoder.decodePath('./gifs/clap.gif')
-  t.is(gif.frames[1].decode().length, 3136)
-
-  gif = Decoder.decodePath('./gifs/NOIDONTTHINKSO.gif')
-  t.is(gif.frames[58].decode().length, 3136)
-
-  gif = Decoder.decodePath('./gifs/pepeMeltdown.gif')
-  t.is(gif.frames[9].decode().length, 50176)
-
-  gif = Decoder.decodePath('./gifs/monkaX.gif')
-  t.is(gif.frames[5].decode().length, 3136)
-
-  gif = Decoder.decodePath('./gifs/TeaTime.gif')
-  t.is(gif.frames[60].decode().length, 3136)
-
-  gif = Decoder.decodePath('./gifs/forsenDisco.gif')
-  t.is(gif.frames[59].decode().length, 3136)
-
-  gif = Decoder.decodePath('./gifs/forsenEnter.gif')
-  t.is(gif.frames[33].decode().length, 3136)
-
-  gif = Decoder.decodePath('./gifs/shadowchanHeart.0') // 0 file gif
-  t.is(gif.frames[0].decode().length, 3136)
-
-  gif = Decoder.decodePath('./gifs/BBoomer.gif') // Interlace Gif
-  t.is(gif.frames[0].decode().length, 3136)
-
-  gif = Decoder.decodePath('./gifs/YESITHINKSO.gif') // 64 bit datum gif
-  t.is(gif.frames[0].decode().length, 3136)
+  for (let gif_test_case of gif_test_cases_2) {
+    let gif = Decoder.decodePath(gif_test_case.file)
+    for (let i = 0; i < gif.frames.length; i++) {
+      t.is(gif.decodeFrame(i).length, gif_test_case.expected)
+    }
+  }
 })
 
 test('sample_2_animation.gif: Frame 3: Top is 2', (t) => {

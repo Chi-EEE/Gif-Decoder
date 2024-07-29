@@ -13,6 +13,7 @@ crate-type = ["cdylib"]
 napi        = "2"
 napi-derive = "2"
 byteorder = "=1.5.0"
+derivative = "=2.2.0"
 
 [build-dependencies]
 napi-build = "2"

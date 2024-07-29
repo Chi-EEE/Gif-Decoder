@@ -7,7 +7,14 @@ use napi_derive::napi;
 use byteorder::{ByteOrder, LittleEndian};
 use std::ops::IndexMut;
 
+use derivative::Derivative;
+
 const MAX_STACK_SIZE: u16 = 4096;
+
+const DISPOSAL_UNSPECIFIED: u32 = 0;
+const DISPOSAL_NONE: u32 = 1;
+const DISPOSAL_BACKGROUND: u32 = 2;
+const DISPOSAL_PREVIOUS: u32 = 3;
 
 fn shl_or(val: u32, shift: usize, def: u32) -> u32 {
   [val << (shift & 31), def][((shift & !31) != 0) as usize]
@@ -16,30 +23,364 @@ fn shr_or(val: u32, shift: usize, def: u32) -> u32 {
   [val >> (shift & 31), def][((shift & !31) != 0) as usize]
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 #[napi(js_name = "Gif")]
 struct Gif {
   pub version: String,
   pub lsd: LogicalScreenDescriptor,
-  pub global_table: Vec<Color>, // Check globalColorFlag before using this
+  pub global_table: Vec<Color>,
   pub frames: Vec<Frame>,
+}
+
+#[derive(Debug, Clone)]
+#[napi(object)]
+struct DecoderOptions {
+  /// Whether to implement the disposal method of the previous frame, default is `true`
+  pub implement_disposal_previous: bool,
+  /// Whether to store the cache of the frame, should be `false` when enabling disableDisposalMethods | rawDecode, default is `true`
+  pub store_cache: bool,
+  /// Whether to disable the use of any disposal methods, default is `false`
+  pub disable_disposal_methods: bool,
+  /// Whether to return the raw decoded frame, also disables the use of any disposal methods, default is `false`
+  pub raw_decode: bool,
+}
+
+impl Default for DecoderOptions {
+  fn default() -> DecoderOptions {
+    DecoderOptions {
+      implement_disposal_previous: true,
+      store_cache: true,
+      disable_disposal_methods: false,
+      raw_decode: false,
+    }
+  }
 }
 
 #[napi]
 impl Gif {
-  // Goes through every index stream of the frames and makes a vector of buffers from them
   #[napi]
-  pub fn decode_frames(&mut self) -> Vec<Buffer> {
+  pub fn decode_frames(&mut self, decoder_options: DecoderOptions) -> Vec<Buffer> {
     let mut buffers: Vec<Buffer> = Vec::new();
-    let frames_iter = self.frames.iter();
-    for frame in frames_iter {
-      buffers.push(frame.decode());
+
+    let has_disposal_3 = self
+      .frames
+      .iter()
+      .any(|frame| frame.gcd.disposal_method == DISPOSAL_PREVIOUS);
+
+    let mut previous_pixels: Buffer =
+      Buffer::from(vec![0; (self.lsd.width * self.lsd.height) as usize * 4]);
+
+    let mut maybe_previous_frame_index: Option<usize> = None;
+    let mut previous_disposal_method = 0;
+    for i in 0..self.frames.len() {
+      let buffer = match &self.frames[i].cached_frame {
+        Some(cached_frame) => cached_frame.to_owned(),
+        None => self.decode_frame_internal(
+          i,
+          &decoder_options,
+          maybe_previous_frame_index,
+          &previous_disposal_method,
+          &has_disposal_3,
+          Some(&mut previous_pixels),
+        ),
+      };
+      buffers.push(buffer);
+      maybe_previous_frame_index = Some(i);
+      previous_disposal_method = self.frames[i].gcd.disposal_method;
     }
     return buffers;
   }
+
+  #[napi]
+  pub fn decode_frame(
+    &mut self,
+    frame_index: u32,
+    decoder_options: DecoderOptions,
+  ) -> Result<Buffer> {
+    if frame_index >= self.frames.len() as u32 {
+      return Err(Error::from_reason("Frame index out of bounds".to_string()));
+    }
+
+    if let Some(cached_frame) = &self.frames[frame_index as usize].cached_frame {
+      return Ok(cached_frame.to_owned());
+    }
+
+    let has_disposal_3 = self
+      .frames
+      .iter()
+      .any(|frame| frame.gcd.disposal_method == DISPOSAL_PREVIOUS);
+
+    let maybe_previous_frame_index: Option<usize> = match frame_index.checked_sub(1) {
+      Some(previous_frame_index) => Some(previous_frame_index as usize),
+      None => None,
+    };
+
+    let previous_disposal_method = self
+      .frames
+      .get(maybe_previous_frame_index.unwrap())
+      .map_or(0, |frame| frame.gcd.disposal_method);
+
+    Ok(self.decode_frame_internal(
+      frame_index as usize,
+      &decoder_options,
+      maybe_previous_frame_index,
+      &previous_disposal_method,
+      &has_disposal_3,
+      None,
+    ))
+  }
+
+  fn decode_frame_internal(
+    &mut self,
+    frame_index: usize,
+    decoder_options: &DecoderOptions,
+    maybe_previous_frame_index: Option<usize>,
+    previous_disposal_method: &u32,
+    has_disposal_3: &bool,
+    maybe_previous_pixels: Option<&mut Buffer>,
+  ) -> Buffer {
+    let mut buffer: Vec<u8> = Vec::new();
+
+    if !decoder_options.raw_decode {
+      if !decoder_options.disable_disposal_methods {
+        if decoder_options.implement_disposal_previous
+          && previous_disposal_method == &DISPOSAL_PREVIOUS
+        {
+          if maybe_previous_pixels.is_some() {
+            buffer = (*(maybe_previous_pixels.as_ref()).unwrap()).to_vec();
+          } else {
+            match maybe_previous_frame_index {
+              None => {
+                self.fill_with_empty_color(&mut buffer);
+              }
+              Some(previous_frame_index) => {
+                let previous_frame = &self.frames[previous_frame_index];
+                match &previous_frame.previous_pixels {
+                  Some(previous_pixels) => buffer = previous_pixels.to_owned().into(),
+                  None => {
+                    let mut maybe_pp_frame_index: Option<usize> =
+                      match previous_frame_index.checked_sub(1) {
+                        Some(pp_frame_index) => Some(pp_frame_index),
+                        None => None,
+                      };
+                    loop {
+                      if let Some(pp_frame_index) = maybe_pp_frame_index {
+                        match &self.frames[pp_frame_index].previous_pixels {
+                          Some(previous_pixels) => {
+                            buffer = previous_pixels.to_owned().into();
+                            break;
+                          }
+                          None => {
+                            maybe_pp_frame_index = match pp_frame_index.checked_sub(1) {
+                              Some(pp_frame_index) => Some(pp_frame_index),
+                              None => None,
+                            };
+                          }
+                        }
+                      } else {
+                        self.fill_with_empty_color(&mut buffer);
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } else if previous_disposal_method == &DISPOSAL_BACKGROUND {
+          self.fill_with_empty_color(&mut buffer);
+          let background_color = match self
+            .global_table
+            .get(self.lsd.background_color_index as usize)
+          {
+            Some(color) => color,
+            None => &Color {
+              red: 0,
+              green: 0,
+              blue: 0,
+            },
+          };
+
+          let transparent_color_index = self.frames[frame_index].gcd.transparent_color_index;
+
+          let is_overflow_transparent_index =
+            transparent_color_index >= self.frames[frame_index].color_table.len() as u32;
+
+          let mut is_bg_transparent = false;
+          if self.frames[frame_index].gcd.transparent_color_flag {
+            is_bg_transparent = (transparent_color_index == self.lsd.background_color_index)
+              || (is_overflow_transparent_index && self.lsd.background_color_index == 0);
+          }
+
+          let top = self.frames[frame_index].im.top;
+          let left = self.frames[frame_index].im.left;
+          let bottom = self.frames[frame_index].im.top + self.frames[frame_index].im.height;
+          let right = self.frames[frame_index].im.left + self.frames[frame_index].im.width;
+          if is_bg_transparent {
+            for y in top..bottom {
+              for x in left..right {
+                let buffer_index = ((((y) * self.lsd.width) + (x)) * 4) as usize;
+                buffer[buffer_index] = background_color.red.try_into().unwrap();
+                buffer[buffer_index + 1] = background_color.green.try_into().unwrap();
+                buffer[buffer_index + 2] = background_color.blue.try_into().unwrap();
+                buffer[buffer_index + 3] = 0;
+              }
+            }
+          } else {
+            for y in top..bottom {
+              for x in left..right {
+                let buffer_index = ((((y) * self.lsd.width) + (x)) * 4) as usize;
+                buffer[buffer_index] = background_color.red.try_into().unwrap();
+                buffer[buffer_index + 1] = background_color.green.try_into().unwrap();
+                buffer[buffer_index + 2] = background_color.blue.try_into().unwrap();
+                buffer[buffer_index + 3] = 255;
+              }
+            }
+          }
+        } else {
+          match maybe_previous_frame_index {
+            None => {
+              self.fill_with_empty_color(&mut buffer);
+            }
+            Some(previous_frame_index) => {
+              let maybe_pp_frame_index: Option<usize> = match previous_frame_index.checked_sub(1) {
+                Some(pp_frame_index) => Some(pp_frame_index),
+                None => None,
+              };
+              let mut previous_disposal_method = match maybe_pp_frame_index {
+                Some(pp_frame_index) => self.frames[pp_frame_index].gcd.disposal_method,
+                None => 0,
+              };
+
+              buffer = match &self.frames[previous_frame_index].cached_frame {
+                Some(cached_frame) => cached_frame.to_owned().into(),
+                None => {
+                  let buffer = self.decode_frame_internal(
+                    previous_frame_index,
+                    &decoder_options,
+                    maybe_pp_frame_index,
+                    &mut previous_disposal_method,
+                    &has_disposal_3,
+                    None,
+                  );
+                  buffer.into()
+                }
+              };
+            }
+          }
+        }
+      } else {
+        self.fill_with_empty_color(&mut buffer);
+      }
+    }
+
+    let frame = self.frames.get_mut(frame_index).unwrap();
+
+    let top = frame.im.top;
+    let left = frame.im.left;
+    let bottom = frame.im.top + frame.im.height;
+    let right = frame.im.left + frame.im.width;
+
+    let mut index = 0;
+    if decoder_options.raw_decode {
+      for _y in top..bottom {
+        for _x in left..right {
+          match frame.index_stream.get(index) {
+            Some(color_index) => match frame.color_table.get(*color_index as usize) {
+              Some(color) => {
+                buffer.push(color.red.try_into().unwrap());
+                buffer.push(color.green.try_into().unwrap());
+                buffer.push(color.blue.try_into().unwrap());
+                let is_transparent_index = frame.gcd.transparent_color_flag
+                  && color_index == (&frame.gcd.transparent_color_index.try_into().unwrap());
+                buffer.push(if is_transparent_index { 0 } else { 255 })
+              }
+              None => {
+                for _ in 0..4 {
+                  buffer.push(0);
+                }
+              }
+            },
+            None => {
+              for _ in 0..4 {
+                buffer.push(0);
+              }
+            }
+          }
+          index += 1;
+        }
+      }
+    } else {
+      for y in top..bottom {
+        for x in left..right {
+          let buffer_index = ((((y) * self.lsd.width) + (x)) * 4) as usize;
+          match frame.index_stream.get(index) {
+            Some(color_index) => match frame.color_table.get(*color_index as usize) {
+              Some(color) => {
+                if *previous_disposal_method == DISPOSAL_UNSPECIFIED
+                  || *previous_disposal_method == DISPOSAL_NONE
+                {
+                  let is_transparent_index = frame.gcd.transparent_color_flag
+                    && color_index == (&frame.gcd.transparent_color_index.try_into().unwrap());
+                  if !is_transparent_index {
+                    buffer[buffer_index] = color.red.try_into().unwrap();
+                    buffer[buffer_index + 1] = color.green.try_into().unwrap();
+                    buffer[buffer_index + 2] = color.blue.try_into().unwrap();
+                    buffer[buffer_index + 3] = 255;
+                  }
+                } else {
+                  buffer[buffer_index] = color.red.try_into().unwrap();
+                  buffer[buffer_index + 1] = color.green.try_into().unwrap();
+                  buffer[buffer_index + 2] = color.blue.try_into().unwrap();
+                  let is_transparent_index = frame.gcd.transparent_color_flag
+                    && color_index == (&frame.gcd.transparent_color_index.try_into().unwrap());
+                  buffer[buffer_index + 3] = if is_transparent_index { 0 } else { 255 }
+                }
+              }
+              None => {}
+            },
+            None => {}
+          }
+          index += 1;
+        }
+      }
+    }
+    let buffer = Buffer::from(buffer);
+
+    if decoder_options.store_cache {
+      frame.cached_frame = Some(buffer.clone());
+    }
+
+    if !decoder_options.raw_decode
+      && !decoder_options.disable_disposal_methods
+      && decoder_options.implement_disposal_previous
+    {
+      let disposal_method = frame.gcd.disposal_method;
+      if *has_disposal_3
+        && disposal_method != DISPOSAL_UNSPECIFIED
+        && disposal_method != DISPOSAL_PREVIOUS
+      {
+        if let Some(previous_pixels) = maybe_previous_pixels {
+          *previous_pixels = buffer.clone();
+        } else {
+          frame.previous_pixels = Some(buffer.clone());
+        }
+      }
+    }
+    buffer
+  }
+
+  fn fill_with_empty_color(&self, buffer: &mut Vec<u8>) {
+    for _ in 0..(self.lsd.width * self.lsd.height) {
+      buffer.push(0);
+      buffer.push(0);
+      buffer.push(0);
+      buffer.push(0);
+    }
+  }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Debug, Clone)]
 #[napi(object)]
 pub struct LogicalScreenDescriptor {
   pub width: u32,
@@ -52,44 +393,20 @@ pub struct LogicalScreenDescriptor {
   pub pixel_aspect_ratio: u32,
 }
 
-#[derive(Default, Clone)]
+#[derive(Derivative, Default, Clone)]
+#[derivative(Debug)]
 #[napi(js_name = "Frame")]
 pub struct Frame {
   pub gcd: GraphicsControlExtension,
   pub im: ImageDescriptor,
   pub color_table: Vec<Color>,
   pub index_stream: Vec<u8>,
-}
-
-#[napi]
-impl Frame {
-  #[napi]
-  pub fn decode(&self) -> Buffer {
-    let mut buffer: Vec<u8> = Vec::new();
-    for index in (&self.index_stream).into_iter() {
-      match self.color_table.get(*index as usize) {
-        Some(color) => {
-          buffer.push(color.red.try_into().unwrap());
-          buffer.push(color.green.try_into().unwrap());
-          buffer.push(color.blue.try_into().unwrap());
-          if self.gcd.transparent_color_flag
-            && index == (&self.gcd.transparent_color_index.try_into().unwrap())
-          {
-            buffer.push(0);
-          } else {
-            buffer.push(255);
-          }
-        }
-        None => {
-          for _ in 0..3 {
-            buffer.push(255);
-          }
-          buffer.push(0);
-        }
-      }
-    }
-    Buffer::from(buffer)
-  }
+  /// Generated when decoding the frame, used to properly implement disposal method 0 | 1, can be disabled using DecoderOptions.storeCache
+  #[derivative(Debug = "ignore")]
+  pub cached_frame: Option<Buffer>,
+  /// Generated when decoding the frame if any disposal method is 3 present in the Gif, used when decoding individual frames, can be disabled using DecoderOptions.implementDisposalPrevious
+  #[derivative(Debug = "ignore")]
+  pub previous_pixels: Option<Buffer>,
 }
 
 impl FromNapiValue for Frame {
@@ -99,6 +416,8 @@ impl FromNapiValue for Frame {
       im: ImageDescriptor::default(),
       color_table: Vec::default(),
       index_stream: Vec::default(),
+      cached_frame: None,
+      previous_pixels: None,
     })
   }
 
@@ -111,11 +430,13 @@ impl FromNapiValue for Frame {
       im: ImageDescriptor::default(),
       color_table: Vec::default(),
       index_stream: Vec::default(),
+      cached_frame: None,
+      previous_pixels: None,
     })
   }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Debug, Clone)]
 #[napi(object)]
 pub struct ImageDescriptor {
   pub left: u32,
@@ -126,7 +447,7 @@ pub struct ImageDescriptor {
   pub sort_flag: bool,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Debug, Clone)]
 #[napi(object)]
 pub struct GraphicsControlExtension {
   pub disposal_method: u32,
@@ -136,15 +457,13 @@ pub struct GraphicsControlExtension {
   pub transparent_color_index: u32,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Debug, Clone)]
 #[napi(object)]
 pub struct Color {
   pub red: u32,
   pub green: u32,
   pub blue: u32,
 }
-
-///
 
 #[napi(js_name = "Decoder")]
 struct Decoder {}
