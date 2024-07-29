@@ -88,7 +88,7 @@ impl Gif {
       maybe_previous_frame_index = Some(i);
       previous_disposal_method = self.frames[i].gcd.disposal_method;
     }
-    return buffers;
+    buffers
   }
 
   #[napi]
@@ -110,10 +110,9 @@ impl Gif {
       .iter()
       .any(|frame| frame.gcd.disposal_method == DISPOSAL_PREVIOUS);
 
-    let maybe_previous_frame_index: Option<usize> = match frame_index.checked_sub(1) {
-      Some(previous_frame_index) => Some(previous_frame_index as usize),
-      None => None,
-    };
+    let maybe_previous_frame_index: Option<usize> = frame_index
+      .checked_sub(1)
+      .map(|previous_frame_index| previous_frame_index as usize);
 
     let previous_disposal_method = match maybe_previous_frame_index {
       Some(previous_frame_index) => self.frames[previous_frame_index].gcd.disposal_method,
@@ -159,10 +158,7 @@ impl Gif {
                   Some(previous_pixels) => buffer = previous_pixels.to_owned().into(),
                   None => {
                     let mut maybe_pp_frame_index: Option<usize> =
-                      match previous_frame_index.checked_sub(1) {
-                        Some(pp_frame_index) => Some(pp_frame_index),
-                        None => None,
-                      };
+                      previous_frame_index.checked_sub(1);
                     loop {
                       if let Some(pp_frame_index) = maybe_pp_frame_index {
                         match &self.frames[pp_frame_index].previous_pixels {
@@ -171,10 +167,7 @@ impl Gif {
                             break;
                           }
                           None => {
-                            maybe_pp_frame_index = match pp_frame_index.checked_sub(1) {
-                              Some(pp_frame_index) => Some(pp_frame_index),
-                              None => None,
-                            };
+                            maybe_pp_frame_index = pp_frame_index.checked_sub(1);
                           }
                         }
                       } else {
@@ -243,11 +236,8 @@ impl Gif {
               self.fill_with_empty_color(&mut buffer);
             }
             Some(previous_frame_index) => {
-              let maybe_pp_frame_index: Option<usize> = match previous_frame_index.checked_sub(1) {
-                Some(pp_frame_index) => Some(pp_frame_index),
-                None => None,
-              };
-              let mut previous_disposal_method = match maybe_pp_frame_index {
+              let maybe_pp_frame_index: Option<usize> = previous_frame_index.checked_sub(1);
+              let previous_disposal_method = match maybe_pp_frame_index {
                 Some(pp_frame_index) => self.frames[pp_frame_index].gcd.disposal_method,
                 None => 0,
               };
@@ -257,10 +247,10 @@ impl Gif {
                 None => {
                   let buffer = self.decode_frame_internal(
                     previous_frame_index,
-                    &decoder_options,
+                    decoder_options,
                     maybe_pp_frame_index,
-                    &mut previous_disposal_method,
-                    &has_disposal_3,
+                    &previous_disposal_method,
+                    has_disposal_3,
                     None,
                   );
                   buffer.into()
@@ -296,15 +286,11 @@ impl Gif {
                 buffer.push(if is_transparent_index { 0 } else { 255 })
               }
               None => {
-                for _ in 0..4 {
-                  buffer.push(0);
-                }
+                buffer.resize(buffer.len() + 4, 0);
               }
             },
             None => {
-              for _ in 0..4 {
-                buffer.push(0);
-              }
+              buffer.resize(buffer.len() + 4, 0);
             }
           }
           index += 1;
@@ -314,32 +300,28 @@ impl Gif {
       for y in top..bottom {
         for x in left..right {
           let buffer_index = ((((y) * self.lsd.width) + (x)) * 4) as usize;
-          match frame.index_stream.get(index) {
-            Some(color_index) => match frame.color_table.get(*color_index as usize) {
-              Some(color) => {
-                if *previous_disposal_method == DISPOSAL_UNSPECIFIED
-                  || *previous_disposal_method == DISPOSAL_NONE
-                {
-                  let is_transparent_index = frame.gcd.transparent_color_flag
-                    && color_index == (&frame.gcd.transparent_color_index.try_into().unwrap());
-                  if !is_transparent_index {
-                    buffer[buffer_index] = color.red.try_into().unwrap();
-                    buffer[buffer_index + 1] = color.green.try_into().unwrap();
-                    buffer[buffer_index + 2] = color.blue.try_into().unwrap();
-                    buffer[buffer_index + 3] = 255;
-                  }
-                } else {
+          if let Some(color_index) = frame.index_stream.get(index) {
+            if let Some(color) = frame.color_table.get(*color_index as usize) {
+              if *previous_disposal_method == DISPOSAL_UNSPECIFIED
+                || *previous_disposal_method == DISPOSAL_NONE
+              {
+                let is_transparent_index = frame.gcd.transparent_color_flag
+                  && color_index == (&frame.gcd.transparent_color_index.try_into().unwrap());
+                if !is_transparent_index {
                   buffer[buffer_index] = color.red.try_into().unwrap();
                   buffer[buffer_index + 1] = color.green.try_into().unwrap();
                   buffer[buffer_index + 2] = color.blue.try_into().unwrap();
-                  let is_transparent_index = frame.gcd.transparent_color_flag
-                    && color_index == (&frame.gcd.transparent_color_index.try_into().unwrap());
-                  buffer[buffer_index + 3] = if is_transparent_index { 0 } else { 255 }
+                  buffer[buffer_index + 3] = 255;
                 }
+              } else {
+                buffer[buffer_index] = color.red.try_into().unwrap();
+                buffer[buffer_index + 1] = color.green.try_into().unwrap();
+                buffer[buffer_index + 2] = color.blue.try_into().unwrap();
+                let is_transparent_index = frame.gcd.transparent_color_flag
+                  && color_index == (&frame.gcd.transparent_color_index.try_into().unwrap());
+                buffer[buffer_index + 3] = if is_transparent_index { 0 } else { 255 }
               }
-              None => {}
-            },
-            None => {}
+            }
           }
           index += 1;
         }
@@ -472,19 +454,19 @@ struct Decoder {}
 impl Decoder {
   #[napi]
   pub fn decode_path(file_path: String) -> Result<Gif> {
-    let contents = match std::fs::read(&file_path) {
+    let contents = match std::fs::read(file_path) {
       Ok(contents) => contents,
       Err(err) => return Err(Error::from_reason(err.to_string())),
     };
     let contents = contents.as_slice();
-    return Self::decode_internal(contents);
+    Self::decode_internal(contents)
   }
 
   #[napi]
   pub fn decode_buffer(buffer: Buffer) -> Result<Gif> {
     let contents: Vec<u8> = buffer.into();
     let contents = contents.as_slice();
-    return Self::decode_internal(contents);
+    Self::decode_internal(contents)
   }
 
   fn decode_internal(contents: &[u8]) -> Result<Gif> {
@@ -529,7 +511,7 @@ impl Decoder {
     let mut offset: usize = 13;
 
     // Global Color Table
-    let length: usize = 3 * 2 << gif.lsd.global_color_size;
+    let length: usize = (3 * 2) << gif.lsd.global_color_size;
     let mut i: usize = offset;
 
     if gif.lsd.global_color_flag {
@@ -577,7 +559,7 @@ impl Decoder {
           green: (green as u32),
           blue: (blue as u32),
         });
-        i = i + 3;
+        i += 3;
       }
       Self::increment_offset(&mut offset, length);
       gif.global_table = global_color_vector;
@@ -652,7 +634,7 @@ impl Decoder {
     // Trailer
     #[cfg(debug_assertions)]
     println!("End of file.");
-    return Ok(gif);
+    Ok(gif)
   }
   fn skip(offset: &mut usize, contents: &[u8]) -> Result<()> {
     loop {
@@ -750,7 +732,7 @@ impl Decoder {
         ))
       }
     };
-    return Ok(());
+    Ok(())
   }
   fn handle_graphic_control_extension(
     offset: &mut usize,
@@ -835,7 +817,7 @@ impl Decoder {
     println!("Image Descriptor Offset: {}", *offset);
 
     let frame_index = gif.frames.len() - 1;
-    let mut parsed_frame = &mut gif.frames[frame_index];
+    let parsed_frame = &mut gif.frames[frame_index];
 
     match contents.get(*offset..*offset + 2) {
       Some(left_bytes) => {
@@ -906,7 +888,7 @@ impl Decoder {
 
     // Local Color Table (Check local color table flag)
     if (packed_field & 0b1000_0000) != 0 {
-      let length: usize = 3 * 2 << (packed_field & 0b0000_0111) as u32;
+      let length: usize = (3 * 2) << (packed_field & 0b0000_0111) as u32;
       let mut i: usize = *offset;
       let mut local_color_vector: Vec<Color> = Vec::new();
 
@@ -949,7 +931,7 @@ impl Decoder {
           green: (green as u32),
           blue: (blue as u32),
         });
-        i = i + 3;
+        i += 3;
       }
       Self::increment_offset(offset, length);
       parsed_frame.color_table = local_color_vector;
@@ -1018,7 +1000,7 @@ impl Decoder {
 			  }
 			};
             Self::increment_offset(offset, 1);
-            if data_sub_blocks_count <= 0 {
+            if data_sub_blocks_count == 0 {
               break;
             }
             let offset_add: usize = *offset + data_sub_blocks_count as usize;
@@ -1063,18 +1045,18 @@ impl Decoder {
         }
         in_code = code;
         if code == available {
-          *pixel_stack.index_mut(top as usize) = first as u8;
+          *pixel_stack.index_mut(top) = first;
           top += 1;
           code = old_code as u32;
         }
         while code > clear_code {
-          *pixel_stack.index_mut(top as usize) = suffix[code as usize];
+          *pixel_stack.index_mut(top) = suffix[code as usize];
           top += 1;
           code = prefix[code as usize] as u32;
         }
-        first = suffix[code as usize] & 0xFF;
+        first = suffix[code as usize];
 
-        *pixel_stack.index_mut(top as usize) = first;
+        *pixel_stack.index_mut(top) = first;
         top += 1;
 
         if available < MAX_STACK_SIZE as u32 {
@@ -1092,9 +1074,7 @@ impl Decoder {
       index_stream.push(pixel_stack[top]);
       n += 1;
     }
-    for _ in index_stream.len()..npix as usize {
-      index_stream.push(0);
-    }
+    index_stream.resize(npix as usize, 0);
     if parsed_frame.im.interlace_flag {
       index_stream = Self::deinterlace(&mut index_stream, parsed_frame.im.width as usize);
     }
@@ -1102,7 +1082,7 @@ impl Decoder {
     Ok(())
   }
   // deinterlace function from https://github.com/matt-way/gifuct-js/blob/master/src/deinterlace.js
-  fn deinterlace(index_stream: &mut Vec<u8>, width: usize) -> Vec<u8> {
+  fn deinterlace(index_stream: &mut [u8], width: usize) -> Vec<u8> {
     let mut new_index_stream = vec![0; index_stream.len()];
     let rows = index_stream.len() / width;
 
@@ -1123,7 +1103,7 @@ impl Decoder {
         to_row += steps[pass];
       }
     }
-    return new_index_stream;
+    new_index_stream
   }
   fn handle_plain_text_extension(offset: &mut usize, gif: &mut Gif, contents: &[u8]) -> Result<()> {
     // Plain Text Extension (Optional)
