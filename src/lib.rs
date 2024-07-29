@@ -35,7 +35,7 @@ impl Gif {
     for frame in frames_iter {
       buffers.push(frame.decode());
     }
-    return buffers;
+    buffers
   }
 }
 
@@ -66,7 +66,7 @@ impl Frame {
   #[napi]
   pub fn decode(&self) -> Buffer {
     let mut buffer: Vec<u8> = Vec::new();
-    for index in (&self.index_stream).into_iter() {
+    for index in self.index_stream.iter() {
       match self.color_table.get(*index as usize) {
         Some(color) => {
           buffer.push(color.red.try_into().unwrap());
@@ -81,10 +81,7 @@ impl Frame {
           }
         }
         None => {
-          for _ in 0..3 {
-            buffer.push(255);
-          }
-          buffer.push(0);
+          buffer.resize(buffer.len() + 4, 0);
         }
       }
     }
@@ -144,8 +141,6 @@ pub struct Color {
   pub blue: u32,
 }
 
-///
-
 #[napi(js_name = "Decoder")]
 struct Decoder {}
 
@@ -153,19 +148,19 @@ struct Decoder {}
 impl Decoder {
   #[napi]
   pub fn decode_path(file_path: String) -> Result<Gif> {
-    let contents = match std::fs::read(&file_path) {
+    let contents = match std::fs::read(file_path) {
       Ok(contents) => contents,
       Err(err) => return Err(Error::from_reason(err.to_string())),
     };
     let contents = contents.as_slice();
-    return Self::decode_internal(contents);
+    Self::decode_internal(contents)
   }
 
   #[napi]
   pub fn decode_buffer(buffer: Buffer) -> Result<Gif> {
     let contents: Vec<u8> = buffer.into();
     let contents = contents.as_slice();
-    return Self::decode_internal(contents);
+    Self::decode_internal(contents)
   }
 
   fn decode_internal(contents: &[u8]) -> Result<Gif> {
@@ -210,7 +205,7 @@ impl Decoder {
     let mut offset: usize = 13;
 
     // Global Color Table
-    let length: usize = 3 * 2 << gif.lsd.global_color_size;
+    let length: usize = (3 * 2) << gif.lsd.global_color_size;
     let mut i: usize = offset;
 
     if gif.lsd.global_color_flag {
@@ -258,7 +253,7 @@ impl Decoder {
           green: (green as u32),
           blue: (blue as u32),
         });
-        i = i + 3;
+        i += 3;
       }
       Self::increment_offset(&mut offset, length);
       gif.global_table = global_color_vector;
@@ -333,7 +328,7 @@ impl Decoder {
     // Trailer
     #[cfg(debug_assertions)]
     println!("End of file.");
-    return Ok(gif);
+    Ok(gif)
   }
   fn skip(offset: &mut usize, contents: &[u8]) -> Result<()> {
     loop {
@@ -431,7 +426,7 @@ impl Decoder {
         ))
       }
     };
-    return Ok(());
+    Ok(())
   }
   fn handle_graphic_control_extension(
     offset: &mut usize,
@@ -516,7 +511,7 @@ impl Decoder {
     println!("Image Descriptor Offset: {}", *offset);
 
     let frame_index = gif.frames.len() - 1;
-    let mut parsed_frame = &mut gif.frames[frame_index];
+    let parsed_frame = &mut gif.frames[frame_index];
 
     match contents.get(*offset..*offset + 2) {
       Some(left_bytes) => {
@@ -587,7 +582,7 @@ impl Decoder {
 
     // Local Color Table (Check local color table flag)
     if (packed_field & 0b1000_0000) != 0 {
-      let length: usize = 3 * 2 << (packed_field & 0b0000_0111) as u32;
+      let length: usize = (3 * 2) << (packed_field & 0b0000_0111) as u32;
       let mut i: usize = *offset;
       let mut local_color_vector: Vec<Color> = Vec::new();
 
@@ -630,7 +625,7 @@ impl Decoder {
           green: (green as u32),
           blue: (blue as u32),
         });
-        i = i + 3;
+        i += 3;
       }
       Self::increment_offset(offset, length);
       parsed_frame.color_table = local_color_vector;
@@ -699,7 +694,7 @@ impl Decoder {
 			  }
 			};
             Self::increment_offset(offset, 1);
-            if data_sub_blocks_count <= 0 {
+            if data_sub_blocks_count == 0 {
               break;
             }
             let offset_add: usize = *offset + data_sub_blocks_count as usize;
@@ -744,18 +739,18 @@ impl Decoder {
         }
         in_code = code;
         if code == available {
-          *pixel_stack.index_mut(top as usize) = first as u8;
+          *pixel_stack.index_mut(top) = first;
           top += 1;
           code = old_code as u32;
         }
         while code > clear_code {
-          *pixel_stack.index_mut(top as usize) = suffix[code as usize];
+          *pixel_stack.index_mut(top) = suffix[code as usize];
           top += 1;
           code = prefix[code as usize] as u32;
         }
-        first = suffix[code as usize] & 0xFF;
+        first = suffix[code as usize];
 
-        *pixel_stack.index_mut(top as usize) = first;
+        *pixel_stack.index_mut(top) = first;
         top += 1;
 
         if available < MAX_STACK_SIZE as u32 {
@@ -773,9 +768,7 @@ impl Decoder {
       index_stream.push(pixel_stack[top]);
       n += 1;
     }
-    for _ in index_stream.len()..npix as usize {
-      index_stream.push(0);
-    }
+    index_stream.resize(npix as usize, 0);
     if parsed_frame.im.interlace_flag {
       index_stream = Self::deinterlace(&mut index_stream, parsed_frame.im.width as usize);
     }
@@ -783,7 +776,7 @@ impl Decoder {
     Ok(())
   }
   // deinterlace function from https://github.com/matt-way/gifuct-js/blob/master/src/deinterlace.js
-  fn deinterlace(index_stream: &mut Vec<u8>, width: usize) -> Vec<u8> {
+  fn deinterlace(index_stream: &mut [u8], width: usize) -> Vec<u8> {
     let mut new_index_stream = vec![0; index_stream.len()];
     let rows = index_stream.len() / width;
 
@@ -804,7 +797,7 @@ impl Decoder {
         to_row += steps[pass];
       }
     }
-    return new_index_stream;
+    new_index_stream
   }
   fn handle_plain_text_extension(offset: &mut usize, gif: &mut Gif, contents: &[u8]) -> Result<()> {
     // Plain Text Extension (Optional)
@@ -861,7 +854,12 @@ impl Decoder {
         Ok(parsed_application) => {
           application = parsed_application;
         }
-        Err(err) => println!("Attempt to get application failed: {}", err),
+        Err(err) => {
+          return Err(Error::from_reason(format!(
+            "Attempt to get application failed: {}",
+            err
+          )))
+        }
       },
       None => {
         return Err(Error::from_reason(
