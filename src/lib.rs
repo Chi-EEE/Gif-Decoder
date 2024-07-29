@@ -115,10 +115,10 @@ impl Gif {
       None => None,
     };
 
-    let previous_disposal_method = self
-      .frames
-      .get(maybe_previous_frame_index.unwrap())
-      .map_or(0, |frame| frame.gcd.disposal_method);
+    let previous_disposal_method = match maybe_previous_frame_index {
+      Some(previous_frame_index) => self.frames[previous_frame_index].gcd.disposal_method,
+      None => 0,
+    };
 
     Ok(self.decode_frame_internal(
       frame_index as usize,
