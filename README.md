@@ -31,3 +31,15 @@ import { readFileSync } from 'fs'
 const gif = Decoder.decodePath('sample.gif')
 const gif = Decoder.decodeBuffer(readFileSync('sample.gif'))
 ```
+
+# Credits
+
+Spec: https://www.w3.org/Graphics/GIF/spec-gif89a.txt
+
+Interlace Function: https://github.com/matt-way/gifuct-js
+
+Gif Blog: https://www.matthewflickinger.com/lab/whatsinagif/index.html
+
+LZW Decompression: https://gist.github.com/devunwired/4479231
+
+Modern Gif: https://github.com/qq15725/modern-gif
