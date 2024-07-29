@@ -468,9 +468,6 @@ impl Decoder {
       }
     };
     parsed_frame.gcd.disposal_method = shr_or((packed_field & 0b0001_1100) as u32, 2, 0);
-    if parsed_frame.gcd.disposal_method == 0 {
-      parsed_frame.gcd.disposal_method = 1; // elect to keep old image if discretionary
-    }
     parsed_frame.gcd.user_input_flag = (packed_field & 0b0000_0010) != 0;
     parsed_frame.gcd.transparent_color_flag = (packed_field & 0b0000_0001) != 0;
     Self::increment_offset(offset, 1);
