@@ -1,6 +1,6 @@
 {
   "name": "@chi_eee/gif-decoder",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "description": "Decodes Gif buffers / files",
   "main": "index.js",
   "repository": "https://github.com/Chi-EEE/Gif-Decoder",
